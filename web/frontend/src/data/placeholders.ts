@@ -67,10 +67,46 @@ export const slots: AppointmentSlot[] = [
     endDatetime: '2026-06-17T14:30:00',
   },
   {
+    id: 104,
+    doctorId: 12,
+    startDatetime: '2026-06-17T09:30:00',
+    endDatetime: '2026-06-17T10:00:00',
+  },
+  {
+    id: 105,
+    doctorId: 12,
+    startDatetime: '2026-06-18T13:00:00',
+    endDatetime: '2026-06-18T13:30:00',
+  },
+  {
     id: 201,
     doctorId: 21,
     startDatetime: '2026-06-17T11:00:00',
     endDatetime: '2026-06-17T11:30:00',
+  },
+  {
+    id: 301,
+    doctorId: 31,
+    startDatetime: '2026-06-18T10:00:00',
+    endDatetime: '2026-06-18T10:30:00',
+  },
+  {
+    id: 401,
+    doctorId: 41,
+    startDatetime: '2026-06-19T15:30:00',
+    endDatetime: '2026-06-19T16:00:00',
+  },
+  {
+    id: 501,
+    doctorId: 51,
+    startDatetime: '2026-06-18T15:00:00',
+    endDatetime: '2026-06-18T15:30:00',
+  },
+  {
+    id: 502,
+    doctorId: 51,
+    startDatetime: '2026-06-19T09:00:00',
+    endDatetime: '2026-06-19T09:30:00',
   },
 ];
 
@@ -78,6 +114,7 @@ export const appointments: Appointment[] = [
   {
     id: 5001,
     status: 'CONFIRMED',
+    slotId: 101,
     departmentName: 'Cardiology',
     doctorName: 'Dr. Asha Mehta',
     specialization: 'Preventive cardiology',
@@ -87,6 +124,7 @@ export const appointments: Appointment[] = [
   {
     id: 5002,
     status: 'PROCESSING',
+    slotId: 501,
     departmentName: 'General Medicine',
     doctorName: 'Dr. Kavya Menon',
     specialization: 'Family medicine',
@@ -96,6 +134,7 @@ export const appointments: Appointment[] = [
   {
     id: 5003,
     status: 'CANCELLED',
+    slotId: 201,
     departmentName: 'Dermatology',
     doctorName: 'Dr. Mira Kapoor',
     specialization: 'Clinical dermatology',

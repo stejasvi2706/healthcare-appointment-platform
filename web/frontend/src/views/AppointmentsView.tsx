@@ -1,6 +1,10 @@
 import { Ban, CalendarClock, ClipboardList } from 'lucide-react';
-import { appointments } from '../data/placeholders';
-import type { AppointmentStatus } from '../types/domain';
+import type { Appointment, AppointmentStatus } from '../types/domain';
+
+interface AppointmentsViewProps {
+  appointments: Appointment[];
+  onCancelAppointment: (appointmentId: number) => void;
+}
 
 const statusLabels: Record<AppointmentStatus, string> = {
   CREATED: 'Created',
@@ -29,7 +33,10 @@ function formatAppointmentTime(start: string, end: string) {
   return `${date}, ${time}`;
 }
 
-export function AppointmentsView() {
+export function AppointmentsView({
+  appointments,
+  onCancelAppointment,
+}: AppointmentsViewProps) {
   return (
     <section className="panel">
       <div className="panel-header">
@@ -41,6 +48,14 @@ export function AppointmentsView() {
       </div>
 
       <div className="appointment-list">
+        {appointments.length === 0 && (
+          <div className="empty-state">
+            <ClipboardList size={28} aria-hidden="true" />
+            <h3>No appointments yet</h3>
+            <p>Requested appointments will appear here.</p>
+          </div>
+        )}
+
         {appointments.map((appointment) => (
           <article className="appointment-row" key={appointment.id}>
             <div className="appointment-main">
@@ -49,7 +64,7 @@ export function AppointmentsView() {
               </span>
               <h3>{appointment.departmentName}</h3>
               <p>
-                {appointment.doctorName} · {appointment.specialization}
+                {appointment.doctorName} - {appointment.specialization}
               </p>
             </div>
             <div className="appointment-time">
@@ -65,7 +80,8 @@ export function AppointmentsView() {
               className="icon-action"
               type="button"
               aria-label={`Cancel appointment ${appointment.id}`}
-              disabled={appointment.status !== 'CONFIRMED'}
+              disabled={!['CREATED', 'PROCESSING', 'CONFIRMED'].includes(appointment.status)}
+              onClick={() => onCancelAppointment(appointment.id)}
             >
               <Ban size={18} aria-hidden="true" />
             </button>
