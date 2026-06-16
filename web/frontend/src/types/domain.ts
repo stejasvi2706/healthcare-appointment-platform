@@ -20,6 +20,12 @@ export interface LoginResponse {
   token: string;
 }
 
+export interface AuthSession {
+  name: string;
+  email: string;
+  token: string;
+}
+
 export interface Department {
   id: number;
   name: string;
@@ -42,6 +48,7 @@ export interface AppointmentSlot {
 export interface Appointment {
   id: number;
   status: AppointmentStatus;
+  slotId?: number;
   departmentName: string;
   doctorName: string;
   specialization: string;
