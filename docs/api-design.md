@@ -72,6 +72,14 @@ GET /api/appointments
 
 Returns appointments belonging to the authenticated user.
 
+### Fetch Appointment Event History
+
+```http
+GET /api/appointments/{appointmentId}/events
+```
+
+Returns processing/audit events for one appointment belonging to the authenticated user.
+
 ## Event Contract
 
 ### Appointment Created
@@ -79,6 +87,7 @@ Returns appointments belonging to the authenticated user.
 ```json
 {
   "eventId": "uuid",
+  "correlationId": "uuid-or-client-provided-id",
   "appointmentId": 123,
   "userId": 456,
   "eventType": "APPOINTMENT_CREATED",
@@ -91,6 +100,7 @@ Returns appointments belonging to the authenticated user.
 ```json
 {
   "eventId": "uuid",
+  "correlationId": "uuid-or-client-provided-id",
   "appointmentId": 123,
   "userId": 456,
   "eventType": "APPOINTMENT_CANCELLED",

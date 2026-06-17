@@ -68,6 +68,9 @@ id
 user_id
 slot_id
 
+start_datetime
+end_datetime
+
 status
 
 created_at
@@ -90,6 +93,8 @@ id
 appointment_id
 
 event_type
+event_id
+correlation_id
 
 old_status
 new_status
@@ -145,10 +150,24 @@ This guarantees:
 * Historical appointments retained
 * Slot reusability after cancellation
 
+The system also prevents one user from holding overlapping active appointments across different doctors. PostgreSQL stores the selected slot time window on `appointments` and enforces this with an exclusion constraint:
+
+```sql
+EXCLUDE USING gist (
+    user_id WITH =,
+    tstzrange(start_datetime, end_datetime, '[)') WITH &&
+)
+WHERE status IN (
+    'CREATED',
+    'PROCESSING',
+    'CONFIRMED'
+);
+```
+
 ## Concurrency Strategy
 
 Booking operations must execute within a transaction.
 
 Database constraints remain the source of truth.
 
-No distributed locking is required for Version 1.
+No distributed locking is required for Version 1. The service layer performs early validation for better error messages, while PostgreSQL constraints protect concurrent requests.

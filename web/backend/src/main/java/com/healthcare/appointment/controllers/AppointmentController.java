@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.healthcare.appointment.dtos.AppointmentEventLogResponse;
 import com.healthcare.appointment.dtos.AppointmentResponse;
 import com.healthcare.appointment.dtos.CreateAppointmentRequest;
 import com.healthcare.appointment.entities.AppUser;
@@ -39,6 +40,15 @@ public class AppointmentController {
     public List<AppointmentResponse> getAppointments(HttpServletRequest request) {
         AppUser user = currentUserService.resolveUser(request);
         return appointmentService.getAppointments(user);
+    }
+
+    @GetMapping("/{appointmentId}/events")
+    public List<AppointmentEventLogResponse> getAppointmentEventLogs(
+            @PathVariable Long appointmentId,
+            HttpServletRequest request
+    ) {
+        AppUser user = currentUserService.resolveUser(request);
+        return appointmentService.getAppointmentEventLogs(user, appointmentId);
     }
 
     @PostMapping

@@ -12,6 +12,7 @@ It is intentionally small in this first implementation: the backend owns request
 - Use `correlationId` in logs and event log rows for cross-service tracing.
 - Update appointment status directly in PostgreSQL.
 - Write appointment event logs for worker-driven status changes.
+- Record a simulated notification-processing audit row after confirming an appointment.
 
 ## Processing Behavior
 
@@ -22,6 +23,8 @@ CREATED -> PROCESSING -> CONFIRMED
 ```
 
 Each status transition writes a `STATUS_UPDATED` row to `appointment_event_logs`.
+
+After confirmation, the worker also writes a `NOTIFICATION_PROCESSED` row. This represents the assignment's notification step without introducing an external email or SMS provider into the local demo stack.
 
 For `APPOINTMENT_CANCELLED`, the worker records the event as processed and does not change appointment status. The backend already marks the appointment as cancelled synchronously.
 
@@ -112,12 +115,12 @@ This worker demonstrates the consumer side of an event-driven architecture.
 
 The backend publishes appointment events after its database transaction commits. The worker consumes those events, stores `eventId` in `processed_events` to make processing idempotent, and updates the appointment state in PostgreSQL. Because the idempotency insert and status updates happen in one database transaction, duplicate Kafka delivery does not duplicate business side effects.
 
-The worker also carries `correlationId` through logs and audit rows. That makes it possible to trace a single booking request from frontend to backend to Kafka to the worker.
+The worker also carries `correlationId` through logs and audit rows. That makes it possible to trace a single booking request from frontend to backend to Kafka to the worker. The notification step is currently simulated by an audit row, which is enough to demonstrate the asynchronous processing flow without depending on third-party messaging services.
 
 ## Known Limitations
 
 - The processing flow is deterministic and always confirms created appointments.
-- There is no notification provider integration yet.
+- Notification processing is simulated in the database audit log; there is no real notification provider integration yet.
 - There is no dead-letter topic handling yet.
 - Kafka topic creation is not handled here.
 - There are unit tests for processing logic, but no integration tests against real Kafka/PostgreSQL yet.

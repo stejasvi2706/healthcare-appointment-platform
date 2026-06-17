@@ -6,6 +6,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.healthcare.appointment.dtos.AppointmentEventLogResponse;
 import com.healthcare.appointment.dtos.AppointmentResponse;
 import com.healthcare.appointment.dtos.CreateAppointmentRequest;
 import com.healthcare.appointment.entities.AppUser;
@@ -56,6 +57,25 @@ public class AppointmentService {
                 .toList();
     }
 
+    @Transactional(readOnly = true)
+    public List<AppointmentEventLogResponse> getAppointmentEventLogs(AppUser user, Long appointmentId) {
+        appointmentRepository.findByIdAndUserId(appointmentId, user.getId())
+                .orElseThrow(() -> new NotFoundException("Appointment not found."));
+
+        return eventLogRepository.findByAppointmentIdOrderByCreatedAtAsc(appointmentId).stream()
+                .map(eventLog -> new AppointmentEventLogResponse(
+                        eventLog.getId(),
+                        eventLog.getEventType(),
+                        eventLog.getEventId(),
+                        eventLog.getCorrelationId(),
+                        eventLog.getOldStatus(),
+                        eventLog.getNewStatus(),
+                        eventLog.getMessage(),
+                        eventLog.getCreatedAt()
+                ))
+                .toList();
+    }
+
     @Transactional
     public AppointmentResponse createAppointment(AppUser user, CreateAppointmentRequest request) {
         if (request.slotId() == null) {
@@ -93,7 +113,7 @@ public class AppointmentService {
             ));
             return appointmentMapper.toResponse(saved);
         } catch (DataIntegrityViolationException exception) {
-            throw new BadRequestException("Slot is no longer available.");
+            throw new BadRequestException("Slot is no longer available or conflicts with an active appointment.");
         }
     }
 
