@@ -1,8 +1,14 @@
-import { Ban, CalendarClock, ClipboardList } from 'lucide-react';
-import type { Appointment, AppointmentStatus } from '../types/domain';
+import { Ban, BellRing, CalendarClock, ClipboardList } from 'lucide-react';
+import type {
+  Appointment,
+  AppointmentEventLog,
+  AppointmentEventType,
+  AppointmentStatus,
+} from '../types/domain';
 
 interface AppointmentsViewProps {
   appointments: Appointment[];
+  appointmentEvents: Record<number, AppointmentEventLog[]>;
   onCancelAppointment: (appointmentId: number) => Promise<void>;
   isLoading: boolean;
   errorMessage: string;
@@ -14,6 +20,13 @@ const statusLabels: Record<AppointmentStatus, string> = {
   CONFIRMED: 'Confirmed',
   CANCELLED: 'Cancelled',
   FAILED: 'Failed',
+};
+
+const eventLabels: Record<AppointmentEventType, string> = {
+  APPOINTMENT_CREATED: 'Appointment requested',
+  APPOINTMENT_CANCELLED: 'Appointment cancelled',
+  STATUS_UPDATED: 'Status updated',
+  NOTIFICATION_PROCESSED: 'Notification processed',
 };
 
 function formatAppointmentTime(start: string, end: string) {
@@ -35,8 +48,25 @@ function formatAppointmentTime(start: string, end: string) {
   return `${date}, ${time}`;
 }
 
+function formatEventTime(value: string) {
+  return new Intl.DateTimeFormat('en', {
+    hour: 'numeric',
+    minute: '2-digit',
+    second: '2-digit',
+  }).format(new Date(value));
+}
+
+function describeEvent(event: AppointmentEventLog) {
+  if (event.eventType === 'STATUS_UPDATED' && event.oldStatus) {
+    return `${statusLabels[event.oldStatus]} to ${statusLabels[event.newStatus]}`;
+  }
+
+  return event.message ?? statusLabels[event.newStatus];
+}
+
 export function AppointmentsView({
   appointments,
+  appointmentEvents,
   onCancelAppointment,
   isLoading,
   errorMessage,
@@ -96,6 +126,24 @@ export function AppointmentsView({
             >
               <Ban size={18} aria-hidden="true" />
             </button>
+            <div className="appointment-timeline" aria-label={`Processing timeline for appointment ${appointment.id}`}>
+              {(appointmentEvents[appointment.id] ?? []).length > 0 ? (
+                appointmentEvents[appointment.id].map((event) => (
+                  <div className="timeline-step" key={event.id}>
+                    <span className="timeline-marker">
+                      <BellRing size={13} aria-hidden="true" />
+                    </span>
+                    <div>
+                      <strong>{eventLabels[event.eventType]}</strong>
+                      <span>{describeEvent(event)}</span>
+                    </div>
+                    <time dateTime={event.createdAt}>{formatEventTime(event.createdAt)}</time>
+                  </div>
+                ))
+              ) : (
+                <p className="empty-note">Processing timeline will appear here.</p>
+              )}
+            </div>
           </article>
         ))}
       </div>
