@@ -1,0 +1,12 @@
+[project]
+name = "healthcare-appointment-worker"
+version = "0.1.0"
+description = "Kafka worker for asynchronous healthcare appointment processing"
+requires-python = ">=3.11"
+dependencies = [
+    "confluent-kafka>=2.6.0",
+    "psycopg[binary]>=3.2.0",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
