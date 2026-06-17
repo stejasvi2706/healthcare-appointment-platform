@@ -82,10 +82,10 @@ web/frontend/
 
 `src/App.tsx`
 
-Owns the current mock application state. It stores:
+Owns the current application state. It stores:
 
 - appointments
-- mock auth session
+- auth session
 - summary counts
 
 It wires the main views together through React Router.
@@ -96,11 +96,11 @@ Implements the booking workflow. It filters doctors by department, filters avail
 
 `src/views/AppointmentsView.tsx`
 
-Shows appointment history and allows local cancellation of active appointments.
+Shows appointment history and cancels active appointments through the backend API.
 
 `src/views/AuthView.tsx`
 
-Implements controlled login/register forms in mock mode. This is intentionally not a real JWT auth implementation yet.
+Implements controlled login/register forms backed by the backend auth API. Once signed in, the sign-in/register form is hidden and only sign-out remains available.
 
 `src/api/client.ts`
 
@@ -166,7 +166,7 @@ The first backend integration pass is complete. The next frontend/backend improv
 1. Add richer field-level validation and backend error messages.
 2. Refresh appointment status through polling or server push instead of a one-time delayed refresh after booking.
 3. Add automated frontend tests around auth, booking, and cancellation flows.
-4. Replace the development mock-token backend auth with real JWT handling once the backend auth branch is implemented.
+4. Add refresh-token/session-expiry handling once the backend supports it.
 
 ## Architecture Notes
 
@@ -203,7 +203,7 @@ As the app grows, state management can be extracted into hooks or a dedicated st
 
 ## Known Limitations
 
-- Auth still depends on the backend's development mock-token implementation.
+- Auth uses the backend JWT returned from login, but there is no refresh-token/session-expiry handling yet.
 - Appointment status refresh after booking is a delayed refresh, not live polling.
 - Error handling is intentionally basic.
 - No automated frontend tests yet.

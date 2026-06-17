@@ -43,6 +43,10 @@ logging:
     level: "%5p [correlationId:%X{correlationId:-none}]"
 
 app:
+  security:
+    jwt:
+      secret: ${JWT_SECRET:development-only-change-this-secret-please}
+      ttl-seconds: ${JWT_TTL_SECONDS:86400}
   kafka:
     topics:
       appointment-events: ${APPOINTMENT_EVENTS_TOPIC:appointment.events}

@@ -59,6 +59,8 @@ services:
       DB_PASSWORD: healthcare
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       APPOINTMENT_EVENTS_TOPIC: appointment.events
+      JWT_SECRET: local-development-jwt-secret-change-before-production
+      JWT_TTL_SECONDS: 86400
       SERVER_PORT: 8080
     ports:
       - "8080:8080"

@@ -16,9 +16,9 @@ This backend is a functional API shell built with:
 - Spring Kafka producer scaffold
 - OpenAPI / Swagger UI
 
-It currently implements the database-backed REST API foundation for departments, doctors, slots, appointments, and mock-token authentication.
+It currently implements the database-backed REST API foundation for departments, doctors, slots, appointments, and JWT-based authentication.
 
-Real JWT validation and the Python worker integration are intentionally not implemented yet.
+The Python worker integration is implemented through Kafka event publishing and direct worker database updates.
 
 It also includes request correlation support. Every HTTP request receives an `X-Correlation-Id` response header. If the client sends `X-Correlation-Id`, the backend reuses it; otherwise it generates one.
 
@@ -29,7 +29,7 @@ The backend currently supports:
 - Health check
   - `GET /api/health`
 
-- Mock account access
+- Account access
   - `POST /api/auth/register`
   - `POST /api/auth/login`
 
@@ -53,13 +53,13 @@ This branch is meant to make the backend demonstrable while keeping the architec
 
 The backend now has real controllers, services, DTOs, repositories, entities, and migrations. It does not fake the database layer.
 
-At the same time, authentication is deliberately temporary:
+Authentication is intentionally lightweight but real enough for local development:
 
-- `POST /api/auth/login` returns a mock token shaped like `mock-user-{id}`.
-- Appointment APIs can resolve that token if sent as `Authorization: Bearer mock-user-{id}`.
-- If no token is supplied, appointment APIs use a local demo user.
+- `POST /api/auth/login` returns a signed HS256 JWT.
+- Appointment APIs require `Authorization: Bearer {token}`.
+- Missing or invalid appointment tokens receive `401 Unauthorized`.
 
-This lets frontend and backend workflows be exercised before the final JWT security implementation is added.
+This keeps the backend stateless while still allowing the frontend and API workflows to use authenticated user context.
 
 ## Folder Structure
 
@@ -86,9 +86,9 @@ web/backend/
 
 `config/SecurityConfig.java`
 
-Configures stateless security, exposes health/docs and current API shell endpoints, and provides a BCrypt password encoder.
+Configures stateless security, exposes public health/docs/catalogue endpoints, protects appointment endpoints, and provides a BCrypt password encoder.
 
-The broad endpoint permits are temporary. They should be tightened when real JWT validation is implemented.
+Appointment APIs require JWT authentication. Health, auth, catalogue reads, and Swagger/OpenAPI remain public.
 
 `config/CorrelationIdFilter.java`
 
@@ -96,7 +96,7 @@ Reads or generates `X-Correlation-Id`, stores it in logging MDC, returns it in r
 
 `controllers/AuthController.java`
 
-Exposes register and login endpoints. Login currently returns a mock token, not a signed JWT.
+Exposes register and login endpoints. Login returns a signed JWT.
 
 `controllers/CatalogueController.java`
 
@@ -108,7 +108,7 @@ Exposes appointment list, create, and cancel APIs. It resolves the current user 
 
 `services/AuthService.java`
 
-Handles registration, password hashing, and mock-token login.
+Handles registration, password hashing, and JWT login.
 
 `services/AppointmentService.java`
 
@@ -124,11 +124,11 @@ Handles read operations for departments, doctors, and available slots.
 
 `services/CurrentUserService.java`
 
-Temporary bridge for mock authentication. It resolves a mock token if present, otherwise creates/uses a demo user.
+Resolves the authenticated user ID from the Spring Security context after `JwtAuthenticationFilter` validates the bearer token.
 
-`services/MockTokenService.java`
+`services/JwtTokenService.java`
 
-Small internal utility for generating and parsing mock tokens. This should be replaced by real JWT support.
+Small internal utility for creating and validating HS256 JWTs using `app.security.jwt.secret` and `app.security.jwt.ttl-seconds`.
 
 `services/CorrelationContext.java`
 
@@ -174,6 +174,8 @@ export DB_USERNAME=healthcare
 export DB_PASSWORD=healthcare
 export KAFKA_BOOTSTRAP_SERVERS=localhost:9092
 export APPOINTMENT_EVENTS_TOPIC=appointment.events
+export JWT_SECRET=local-development-jwt-secret-change-before-production
+export JWT_TTL_SECONDS=86400
 export SERVER_PORT=8080
 ```
 
@@ -242,7 +244,7 @@ Create appointment:
 ```bash
 curl -X POST http://localhost:8080/api/appointments \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer mock-user-1" \
+  -H "Authorization: Bearer ${TOKEN}" \
   -d '{"slotId":1}'
 ```
 
@@ -250,27 +252,26 @@ Cancel appointment:
 
 ```bash
 curl -X DELETE http://localhost:8080/api/appointments/1 \
-  -H "Authorization: Bearer mock-user-1"
+  -H "Authorization: Bearer ${TOKEN}"
 ```
 
-## Temporary Auth Boundary
+## Auth Boundary
 
-The mock-token system exists only to make the backend usable before JWT support is implemented.
+The backend uses signed JWTs for local stateless authentication.
 
 What it does:
 
-- Lets login return a token.
-- Lets appointment APIs associate requests with a user.
+- Lets login return a signed token.
+- Lets appointment APIs associate requests with the authenticated user.
 - Allows frontend/backend integration work to continue.
 
 What it does not do:
 
-- It does not cryptographically sign tokens.
-- It does not validate token expiry.
+- It does not implement refresh tokens.
 - It does not implement roles.
-- It does not protect endpoints in a production-ready way.
+- It does not include production key management.
 
-This should be replaced in the backend auth branch with JWT generation and validation.
+Production hardening should add key management, refresh tokens or short-lived sessions, stronger validation, and role-aware authorization.
 
 ## Worker And Kafka Boundary
 
