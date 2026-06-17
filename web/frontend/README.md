@@ -38,6 +38,7 @@ The app supports three main views:
   - Register through `POST /api/auth/register`.
   - Sign in through `POST /api/auth/login`.
   - Store the returned backend token in `localStorage`.
+  - Clear expired or invalid sessions when protected appointment APIs return `401` or `403`.
   - Sign out.
 
 ## Design Intent
@@ -89,7 +90,7 @@ Owns the current application state. It stores:
 - auth session
 - summary counts
 
-It wires the main views together through React Router and refreshes appointment history on a fixed interval while a user is signed in.
+It wires the main views together through React Router, refreshes appointment history on a fixed interval while a user is signed in, and clears the local session when protected appointment APIs reject the stored token.
 
 `src/views/BookingView.tsx`
 
@@ -167,7 +168,7 @@ The first backend integration pass is complete. The next frontend/backend improv
 1. Add richer field-level validation and backend error messages.
 2. Add smarter polling behavior such as backoff, visibility-aware refresh, or server push if the backend later supports it.
 3. Add automated frontend tests around auth, booking, and cancellation flows.
-4. Add refresh-token/session-expiry handling once the backend supports it.
+4. Add refresh-token renewal once the backend supports it.
 
 ## Architecture Notes
 
@@ -199,13 +200,14 @@ Important points to explain:
 - Views consume props and domain types, which keeps them easier to adapt later.
 - Appointment status handling is intentionally simple; the backend and worker own state transitions.
 - The frontend polls appointment history while signed in because the worker updates appointment status asynchronously through the database.
+- Expired sessions are handled at the protected workflow boundary: appointment API `401/403` responses clear local auth state and ask the user to sign in again.
 - The design avoids coupling the frontend to Kafka or worker internals.
 
 As the app grows, state management can be extracted into hooks or a dedicated store, but adding that abstraction now would be premature.
 
 ## Known Limitations
 
-- Auth uses the backend JWT returned from login, but there is no refresh-token/session-expiry handling yet.
+- Auth uses the backend JWT returned from login, but there is no refresh-token renewal yet.
 - Appointment status refresh uses fixed-interval polling, not server push or visibility-aware backoff.
 - Error handling is intentionally basic.
 - No automated frontend tests yet.

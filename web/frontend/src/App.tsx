@@ -39,6 +39,14 @@ const navigation = [
 ];
 
 const APPOINTMENT_REFRESH_INTERVAL_MS = 3000;
+const SESSION_EXPIRED_MESSAGE = 'Your session expired. Please sign in again.';
+
+function isAuthenticationError(error: unknown) {
+  return (
+    axios.isAxiosError(error) &&
+    (error.response?.status === 401 || error.response?.status === 403)
+  );
+}
 
 function getErrorMessage(error: unknown) {
   if (axios.isAxiosError(error)) {
@@ -94,6 +102,20 @@ function App() {
   const [appointmentError, setAppointmentError] = useState('');
   const [authError, setAuthError] = useState('');
 
+  const clearSession = useCallback(() => {
+    window.localStorage.removeItem('authToken');
+    window.localStorage.removeItem('authEmail');
+    window.localStorage.removeItem('authName');
+    setSession(null);
+    setAppointments([]);
+  }, []);
+
+  const handleSessionExpired = useCallback(() => {
+    clearSession();
+    setAuthError(SESSION_EXPIRED_MESSAGE);
+    return SESSION_EXPIRED_MESSAGE;
+  }, [clearSession]);
+
   const stats = useMemo(
     () => ({
       confirmed: appointments.filter((appointment) => appointment.status === 'CONFIRMED').length,
@@ -103,22 +125,30 @@ function App() {
     [appointments, departments],
   );
 
-  const loadAppointments = useCallback(async (options: { silent?: boolean } = {}) => {
-    if (!options.silent) {
-      setIsLoadingAppointments(true);
-    }
-    setAppointmentError('');
-
-    try {
-      setAppointments(await fetchAppointments());
-    } catch (error) {
-      setAppointmentError(getErrorMessage(error));
-    } finally {
+  const loadAppointments = useCallback(
+    async (options: { silent?: boolean } = {}) => {
       if (!options.silent) {
-        setIsLoadingAppointments(false);
+        setIsLoadingAppointments(true);
       }
-    }
-  }, []);
+      setAppointmentError('');
+
+      try {
+        setAppointments(await fetchAppointments());
+      } catch (error) {
+        if (isAuthenticationError(error)) {
+          setAppointmentError(handleSessionExpired());
+          return;
+        }
+
+        setAppointmentError(getErrorMessage(error));
+      } finally {
+        if (!options.silent) {
+          setIsLoadingAppointments(false);
+        }
+      }
+    },
+    [handleSessionExpired],
+  );
 
   useEffect(() => {
     async function loadCatalogue() {
@@ -182,6 +212,11 @@ function App() {
       await loadAppointments({ silent: true });
       return true;
     } catch (error) {
+      if (isAuthenticationError(error)) {
+        setBookingError(handleSessionExpired());
+        return false;
+      }
+
       setBookingError(getErrorMessage(error));
       return false;
     } finally {
@@ -196,6 +231,11 @@ function App() {
       await cancelAppointment(appointmentId);
       await loadAppointments();
     } catch (error) {
+      if (isAuthenticationError(error)) {
+        setAppointmentError(handleSessionExpired());
+        return;
+      }
+
       setAppointmentError(getErrorMessage(error));
     }
   }
@@ -246,11 +286,9 @@ function App() {
   }
 
   function handleLogout() {
-    window.localStorage.removeItem('authToken');
-    window.localStorage.removeItem('authEmail');
-    window.localStorage.removeItem('authName');
-    setSession(null);
-    setAppointments([]);
+    clearSession();
+    setAuthError('');
+    setAppointmentError('');
   }
 
   return (
