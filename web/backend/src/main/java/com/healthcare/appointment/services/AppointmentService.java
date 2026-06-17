@@ -63,6 +63,7 @@ public class AppointmentService {
                     saved,
                     AppointmentEventType.APPOINTMENT_CREATED,
                     null,
+                    null,
                     AppointmentStatus.CREATED,
                     "Appointment request created."
             ));
@@ -95,6 +96,7 @@ public class AppointmentService {
         eventLogRepository.save(new AppointmentEventLog(
                 appointment,
                 AppointmentEventType.APPOINTMENT_CANCELLED,
+                null,
                 oldStatus,
                 AppointmentStatus.CANCELLED,
                 "Appointment cancelled by user."

@@ -61,21 +61,21 @@ This lets frontend and backend workflows be exercised before the final JWT secur
 
 ```text
 web/backend/
-├── src/main/java/com/healthcare/appointment/
-│   ├── config/
-│   ├── controllers/
-│   ├── dtos/
-│   ├── entities/
-│   ├── exceptions/
-│   ├── repositories/
-│   ├── services/
-│   └── HealthcareAppointmentApplication.java
-├── src/main/resources/
-│   ├── application.yml
-│   └── db/migration/
-├── src/test/
-├── pom.xml
-└── README.md
++-- src/main/java/com/healthcare/appointment/
+|   +-- config/
+|   +-- controllers/
+|   +-- dtos/
+|   +-- entities/
+|   +-- exceptions/
+|   +-- repositories/
+|   +-- services/
+|   +-- HealthcareAppointmentApplication.java
++-- src/main/resources/
+|   +-- application.yml
+|   +-- db/migration/
++-- src/test/
++-- pom.xml
++-- README.md
 ```
 
 ## Important Files
@@ -129,6 +129,10 @@ Creates the core tables, constraints, indexes, and active-slot partial unique in
 `db/migration/V2__seed_departments_doctors_slots.sql`
 
 Seeds initial departments, doctors, and pre-generated appointment slots.
+
+`db/migration/V3__add_event_idempotency.sql`
+
+Adds the `processed_events` table and optional `appointment_event_logs.event_id` column. This prepares the backend and worker for at-least-once Kafka delivery.
 
 ## How To Run
 
@@ -250,9 +254,11 @@ Later:
 - Backend should publish `APPOINTMENT_CREATED` and `APPOINTMENT_CANCELLED`.
 - Worker should consume events.
 - Worker should update async statuses such as `PROCESSING`, `CONFIRMED`, and `FAILED`.
-- Worker idempotency should be solved before implementation, likely with a `processed_events` table or persisted `eventId`.
+- Worker should record consumed event IDs in `processed_events`.
 
-This is important because the current design documents include `eventId` in Kafka events, but the database schema does not yet persist it.
+This is important because Kafka consumers usually process messages at least once. If the same event is delivered twice, `processed_events.event_id` lets the worker detect the duplicate and skip side effects.
+
+`appointment_event_logs.event_id` is optional because not every audit row comes from Kafka. Synchronous API actions can write audit rows without an event ID, while worker-driven status changes can include the Kafka event ID for traceability.
 
 ## Interview Explanation
 
@@ -271,7 +277,7 @@ Important points to explain:
 - The service layer catches duplicate booking conflicts and returns a user-friendly error.
 - Appointment lifecycle is intentionally simple until Kafka/worker status processing is implemented.
 - Mock-token auth is a development bridge, not production security.
-- Worker event idempotency is a known design issue and should be addressed before Kafka processing is implemented.
+- Worker event idempotency is handled with a dedicated `processed_events` table before Kafka processing is implemented.
 
 ## Known Limitations
 
@@ -279,6 +285,7 @@ Important points to explain:
 - API endpoints are broadly permitted in `SecurityConfig` for the functional shell.
 - Kafka producer logic is not implemented yet.
 - Worker-driven status updates are not implemented yet.
+- `processed_events` is schema groundwork only until the worker is implemented.
 - No integration tests against PostgreSQL are present yet.
 - No Docker Compose orchestration has been verified from this backend branch yet.
 - Frontend dev server proxying is not configured in this backend branch.
