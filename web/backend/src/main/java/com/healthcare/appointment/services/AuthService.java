@@ -18,10 +18,16 @@ public class AuthService {
 
     private final AppUserRepository appUserRepository;
     private final PasswordEncoder passwordEncoder;
+    private final JwtTokenService jwtTokenService;
 
-    public AuthService(AppUserRepository appUserRepository, PasswordEncoder passwordEncoder) {
+    public AuthService(
+            AppUserRepository appUserRepository,
+            PasswordEncoder passwordEncoder,
+            JwtTokenService jwtTokenService
+    ) {
         this.appUserRepository = appUserRepository;
         this.passwordEncoder = passwordEncoder;
+        this.jwtTokenService = jwtTokenService;
     }
 
     @Transactional
@@ -50,7 +56,7 @@ public class AuthService {
             throw new BadRequestException("Invalid email or password.");
         }
 
-        return new LoginResponse(MockTokenService.createToken(user.getId()));
+        return new LoginResponse(jwtTokenService.createToken(user.getId()));
     }
 
     private String normalizeEmail(String email) {

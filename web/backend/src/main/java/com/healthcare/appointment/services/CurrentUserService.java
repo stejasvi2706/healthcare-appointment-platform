@@ -1,10 +1,12 @@
 package com.healthcare.appointment.services;
 
-import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.healthcare.appointment.entities.AppUser;
+import com.healthcare.appointment.exceptions.NotFoundException;
 import com.healthcare.appointment.repositories.AppUserRepository;
 
 import jakarta.servlet.http.HttpServletRequest;
@@ -12,33 +14,21 @@ import jakarta.servlet.http.HttpServletRequest;
 @Service
 public class CurrentUserService {
 
-    private static final String DEMO_EMAIL = "patient@example.com";
-
     private final AppUserRepository appUserRepository;
-    private final PasswordEncoder passwordEncoder;
 
-    public CurrentUserService(AppUserRepository appUserRepository, PasswordEncoder passwordEncoder) {
+    public CurrentUserService(AppUserRepository appUserRepository) {
         this.appUserRepository = appUserRepository;
-        this.passwordEncoder = passwordEncoder;
     }
 
-    @Transactional
+    @Transactional(readOnly = true)
     public AppUser resolveUser(HttpServletRequest request) {
-        Long userId = MockTokenService.extractUserId(request.getHeader("Authorization"));
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
 
-        if (userId != null) {
-            return appUserRepository.findById(userId).orElseGet(this::demoUser);
+        if (authentication == null || !(authentication.getPrincipal() instanceof Long userId)) {
+            throw new NotFoundException("User not found.");
         }
 
-        return demoUser();
-    }
-
-    private AppUser demoUser() {
-        return appUserRepository.findByEmail(DEMO_EMAIL)
-                .orElseGet(() -> appUserRepository.save(new AppUser(
-                        "Patient Demo",
-                        DEMO_EMAIL,
-                        passwordEncoder.encode("password123")
-                )));
+        return appUserRepository.findById(userId)
+                .orElseThrow(() -> new NotFoundException("User not found."));
     }
 }
