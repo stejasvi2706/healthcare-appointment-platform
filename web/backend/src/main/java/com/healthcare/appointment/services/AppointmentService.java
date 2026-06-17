@@ -63,6 +63,7 @@ public class AppointmentService {
                     saved,
                     AppointmentEventType.APPOINTMENT_CREATED,
                     null,
+                    CorrelationContext.get(),
                     null,
                     AppointmentStatus.CREATED,
                     "Appointment request created."
@@ -97,6 +98,7 @@ public class AppointmentService {
                 appointment,
                 AppointmentEventType.APPOINTMENT_CANCELLED,
                 null,
+                CorrelationContext.get(),
                 oldStatus,
                 AppointmentStatus.CANCELLED,
                 "Appointment cancelled by user."

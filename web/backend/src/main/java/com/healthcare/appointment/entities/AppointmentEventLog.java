@@ -35,6 +35,9 @@ public class AppointmentEventLog {
     @Column(name = "event_id")
     private UUID eventId;
 
+    @Column(name = "correlation_id", length = 100)
+    private String correlationId;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "old_status", length = 20)
     private AppointmentStatus oldStatus;
@@ -56,6 +59,7 @@ public class AppointmentEventLog {
             Appointment appointment,
             AppointmentEventType eventType,
             UUID eventId,
+            String correlationId,
             AppointmentStatus oldStatus,
             AppointmentStatus newStatus,
             String message
@@ -63,6 +67,7 @@ public class AppointmentEventLog {
         this.appointment = appointment;
         this.eventType = eventType;
         this.eventId = eventId;
+        this.correlationId = correlationId;
         this.oldStatus = oldStatus;
         this.newStatus = newStatus;
         this.message = message;
@@ -89,6 +94,10 @@ public class AppointmentEventLog {
 
     public UUID getEventId() {
         return eventId;
+    }
+
+    public String getCorrelationId() {
+        return correlationId;
     }
 
     public AppointmentStatus getOldStatus() {
