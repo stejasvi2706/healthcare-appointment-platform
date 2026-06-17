@@ -1,6 +1,7 @@
 import { apiClient } from './client';
 import type {
   Appointment,
+  AppointmentEventLog,
   AppointmentSlot,
   CreateAppointmentRequest,
   Department,
@@ -52,5 +53,12 @@ export async function cancelAppointment(appointmentId: number) {
 
 export async function fetchAppointments() {
   const response = await apiClient.get<Appointment[]>('/appointments');
+  return response.data;
+}
+
+export async function fetchAppointmentEvents(appointmentId: number) {
+  const response = await apiClient.get<AppointmentEventLog[]>(
+    `/appointments/${appointmentId}/events`,
+  );
   return response.data;
 }

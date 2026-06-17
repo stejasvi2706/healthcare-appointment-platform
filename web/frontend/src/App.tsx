@@ -17,6 +17,7 @@ import { AuthView } from './views/AuthView';
 import {
   cancelAppointment,
   createAppointment,
+  fetchAppointmentEvents,
   fetchAppointments,
   fetchAvailableSlots,
   fetchDepartments,
@@ -26,6 +27,7 @@ import {
 } from './api/appointments';
 import type {
   Appointment,
+  AppointmentEventLog,
   AppointmentSlot,
   AuthSession,
   Department,
@@ -83,6 +85,9 @@ function deriveNameFromEmail(email: string) {
 
 function App() {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [appointmentEvents, setAppointmentEvents] = useState<Record<number, AppointmentEventLog[]>>(
+    {},
+  );
   const [departments, setDepartments] = useState<Department[]>([]);
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [slots, setSlots] = useState<AppointmentSlot[]>([]);
@@ -108,6 +113,7 @@ function App() {
     window.localStorage.removeItem('authName');
     setSession(null);
     setAppointments([]);
+    setAppointmentEvents({});
   }, []);
 
   const handleSessionExpired = useCallback(() => {
@@ -125,6 +131,25 @@ function App() {
     [appointments, departments],
   );
 
+  const loadAppointmentEvents = useCallback(
+    async (appointmentList: Appointment[]) => {
+      if (appointmentList.length === 0) {
+        setAppointmentEvents({});
+        return;
+      }
+
+      const eventEntries = await Promise.all(
+        appointmentList.map(async (appointment) => [
+          appointment.id,
+          await fetchAppointmentEvents(appointment.id),
+        ] as const),
+      );
+
+      setAppointmentEvents(Object.fromEntries(eventEntries));
+    },
+    [],
+  );
+
   const loadAppointments = useCallback(
     async (options: { silent?: boolean } = {}) => {
       if (!options.silent) {
@@ -133,7 +158,9 @@ function App() {
       setAppointmentError('');
 
       try {
-        setAppointments(await fetchAppointments());
+        const appointmentList = await fetchAppointments();
+        setAppointments(appointmentList);
+        await loadAppointmentEvents(appointmentList);
       } catch (error) {
         if (isAuthenticationError(error)) {
           setAppointmentError(handleSessionExpired());
@@ -147,7 +174,7 @@ function App() {
         }
       }
     },
-    [handleSessionExpired],
+    [handleSessionExpired, loadAppointmentEvents],
   );
 
   useEffect(() => {
@@ -372,6 +399,7 @@ function App() {
             element={
               <AppointmentsView
                 appointments={appointments}
+                appointmentEvents={appointmentEvents}
                 onCancelAppointment={handleCancelAppointment}
                 isLoading={isLoadingAppointments}
                 errorMessage={appointmentError}

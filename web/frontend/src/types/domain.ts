@@ -5,6 +5,12 @@ export type AppointmentStatus =
   | 'CANCELLED'
   | 'FAILED';
 
+export type AppointmentEventType =
+  | 'APPOINTMENT_CREATED'
+  | 'APPOINTMENT_CANCELLED'
+  | 'STATUS_UPDATED'
+  | 'NOTIFICATION_PROCESSED';
+
 export interface RegisterRequest {
   name: string;
   email: string;
@@ -54,6 +60,17 @@ export interface Appointment {
   specialization: string;
   startDatetime: string;
   endDatetime: string;
+}
+
+export interface AppointmentEventLog {
+  id: number;
+  eventType: AppointmentEventType;
+  eventId?: string | null;
+  correlationId?: string | null;
+  oldStatus?: AppointmentStatus | null;
+  newStatus: AppointmentStatus;
+  message?: string | null;
+  createdAt: string;
 }
 
 export interface CreateAppointmentRequest {

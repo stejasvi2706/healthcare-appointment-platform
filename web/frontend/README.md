@@ -31,6 +31,8 @@ The app supports three main views:
 - Appointment history
   - Fetch appointments from `GET /api/appointments`.
   - Poll appointments while signed in so worker-driven status changes appear automatically.
+  - Fetch appointment processing events from `GET /api/appointments/{appointmentId}/events`.
+  - Show a processing timeline for status updates and notification processing.
   - See status badges for `CREATED`, `PROCESSING`, `CONFIRMED`, `CANCELLED`, and `FAILED`.
   - Cancel active appointments through `DELETE /api/appointments/{appointmentId}`.
 
@@ -98,7 +100,7 @@ Implements the booking workflow. It filters doctors by department, filters avail
 
 `src/views/AppointmentsView.tsx`
 
-Shows appointment history and cancels active appointments through the backend API.
+Shows appointment history, renders the backend/worker processing timeline, and cancels active appointments through the backend API.
 
 `src/views/AuthView.tsx`
 
@@ -120,6 +122,7 @@ Defines wrapper functions for the backend API paths:
 - `POST /api/appointments`
 - `DELETE /api/appointments/{appointmentId}`
 - `GET /api/appointments`
+- `GET /api/appointments/{appointmentId}/events`
 
 These wrappers are now used by the views through `App.tsx`.
 
@@ -200,6 +203,7 @@ Important points to explain:
 - Views consume props and domain types, which keeps them easier to adapt later.
 - Appointment status handling is intentionally simple; the backend and worker own state transitions.
 - The frontend polls appointment history while signed in because the worker updates appointment status asynchronously through the database.
+- The processing timeline is read from backend audit events, so the UI can show Kafka/worker progress without knowing Kafka internals.
 - Expired sessions are handled at the protected workflow boundary: appointment API `401/403` responses clear local auth state and ask the user to sign in again.
 - The design avoids coupling the frontend to Kafka or worker internals.
 

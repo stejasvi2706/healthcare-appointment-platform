@@ -430,6 +430,50 @@ h3 {
   gap: 8px;
 }
 
+.appointment-timeline {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid #e4ece9;
+}
+
+.timeline-step {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  min-height: 34px;
+  color: #52625f;
+  font-size: 0.82rem;
+}
+
+.timeline-marker {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  color: #1f7670;
+  background: #e4f4f0;
+  border: 1px solid #c9e4de;
+  border-radius: 999px;
+}
+
+.timeline-step strong,
+.timeline-step span {
+  display: block;
+}
+
+.timeline-step strong {
+  color: #213331;
+  font-size: 0.84rem;
+}
+
+.timeline-step time {
+  color: #687875;
+  white-space: nowrap;
+}
+
 .status-pill {
   display: inline-flex;
   margin-bottom: 8px;
@@ -601,5 +645,13 @@ h3 {
 
   .quick-stats div {
     flex: 1 1 150px;
+  }
+
+  .timeline-step {
+    grid-template-columns: 26px minmax(0, 1fr);
+  }
+
+  .timeline-step time {
+    grid-column: 2;
   }
 }
