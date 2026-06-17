@@ -9,17 +9,28 @@ import {
   Users,
 } from 'lucide-react';
 import { NavLink, Route, Routes } from 'react-router-dom';
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import axios from 'axios';
 import { BookingView } from './views/BookingView';
 import { AppointmentsView } from './views/AppointmentsView';
 import { AuthView } from './views/AuthView';
 import {
-  appointments as initialAppointments,
-  departments,
-  doctors,
-  slots,
-} from './data/placeholders';
-import type { Appointment, AuthSession } from './types/domain';
+  cancelAppointment,
+  createAppointment,
+  fetchAppointments,
+  fetchAvailableSlots,
+  fetchDepartments,
+  fetchDoctorsByDepartment,
+  login,
+  register,
+} from './api/appointments';
+import type {
+  Appointment,
+  AppointmentSlot,
+  AuthSession,
+  Department,
+  Doctor,
+} from './types/domain';
 
 const navigation = [
   { to: '/', label: 'Book', icon: CalendarDays },
@@ -27,8 +38,44 @@ const navigation = [
   { to: '/auth', label: 'Access', icon: LogIn },
 ];
 
+function getErrorMessage(error: unknown) {
+  if (axios.isAxiosError(error)) {
+    const responseData = error.response?.data;
+
+    if (
+      responseData &&
+      typeof responseData === 'object' &&
+      'message' in responseData &&
+      typeof responseData.message === 'string'
+    ) {
+      return responseData.message;
+    }
+
+    if (error.response?.status === 400) {
+      return 'Please check the details and try again.';
+    }
+
+    if (error.response?.status === 401 || error.response?.status === 403) {
+      return 'Incorrect email or password.';
+    }
+  }
+
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return 'Something went wrong. Please try again.';
+}
+
+function deriveNameFromEmail(email: string) {
+  return email.split('@')[0] || 'Patient';
+}
+
 function App() {
-  const [appointments, setAppointments] = useState<Appointment[]>(initialAppointments);
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [doctors, setDoctors] = useState<Doctor[]>([]);
+  const [slots, setSlots] = useState<AppointmentSlot[]>([]);
   const [session, setSession] = useState<AuthSession | null>(() => {
     const token = window.localStorage.getItem('authToken');
     const email = window.localStorage.getItem('authEmail');
@@ -36,6 +83,14 @@ function App() {
 
     return token && email && name ? { token, email, name } : null;
   });
+  const [isLoadingCatalogue, setIsLoadingCatalogue] = useState(true);
+  const [isLoadingSlots, setIsLoadingSlots] = useState(false);
+  const [isLoadingAppointments, setIsLoadingAppointments] = useState(false);
+  const [isCreatingAppointment, setIsCreatingAppointment] = useState(false);
+  const [isAuthenticating, setIsAuthenticating] = useState(false);
+  const [bookingError, setBookingError] = useState('');
+  const [appointmentError, setAppointmentError] = useState('');
+  const [authError, setAuthError] = useState('');
 
   const stats = useMemo(
     () => ({
@@ -43,49 +98,135 @@ function App() {
       processing: appointments.filter((appointment) => appointment.status === 'PROCESSING').length,
       departments: departments.length,
     }),
-    [appointments],
+    [appointments, departments],
   );
 
-  function handleCreateAppointment(slotId: number) {
-    const slot = slots.find((item) => item.id === slotId);
-    const doctor = slot ? doctors.find((item) => item.id === slot.doctorId) : undefined;
-    const department = doctor
-      ? departments.find((item) => item.id === doctor.departmentId)
-      : undefined;
+  const loadAppointments = useCallback(async () => {
+    setIsLoadingAppointments(true);
+    setAppointmentError('');
 
-    if (!slot || !doctor || !department) {
-      return;
+    try {
+      setAppointments(await fetchAppointments());
+    } catch (error) {
+      setAppointmentError(getErrorMessage(error));
+    } finally {
+      setIsLoadingAppointments(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    async function loadCatalogue() {
+      setIsLoadingCatalogue(true);
+      setBookingError('');
+
+      try {
+        const departmentList = await fetchDepartments();
+        const doctorLists = await Promise.all(
+          departmentList.map((department) => fetchDoctorsByDepartment(department.id)),
+        );
+
+        setDepartments(departmentList);
+        setDoctors(doctorLists.flat());
+      } catch (error) {
+        setBookingError(getErrorMessage(error));
+      } finally {
+        setIsLoadingCatalogue(false);
+      }
     }
 
-    const appointment: Appointment = {
-      id: Date.now(),
-      slotId,
-      status: 'CREATED',
-      departmentName: department.name,
-      doctorName: doctor.name,
-      specialization: doctor.specialization,
-      startDatetime: slot.startDatetime,
-      endDatetime: slot.endDatetime,
-    };
+    void loadCatalogue();
+    void loadAppointments();
+  }, [loadAppointments]);
 
-    setAppointments((current) => [appointment, ...current]);
+  const handleLoadSlots = useCallback(async (doctorId: number, date: string) => {
+    setIsLoadingSlots(true);
+    setBookingError('');
+
+    try {
+      setSlots(await fetchAvailableSlots(doctorId, date));
+    } catch (error) {
+      setBookingError(getErrorMessage(error));
+      setSlots([]);
+    } finally {
+      setIsLoadingSlots(false);
+    }
+  }, []);
+
+  async function handleCreateAppointment(slotId: number) {
+    setIsCreatingAppointment(true);
+    setBookingError('');
+
+    try {
+      const appointment = await createAppointment({ slotId });
+      setAppointments((current) => [appointment, ...current]);
+      setSlots((current) => current.filter((slot) => slot.id !== slotId));
+      await loadAppointments();
+      window.setTimeout(() => {
+        void loadAppointments();
+      }, 2500);
+      return true;
+    } catch (error) {
+      setBookingError(getErrorMessage(error));
+      return false;
+    } finally {
+      setIsCreatingAppointment(false);
+    }
   }
 
-  function handleCancelAppointment(appointmentId: number) {
-    setAppointments((current) =>
-      current.map((appointment) =>
-        appointment.id === appointmentId
-          ? { ...appointment, status: 'CANCELLED' }
-          : appointment,
-      ),
-    );
+  async function handleCancelAppointment(appointmentId: number) {
+    setAppointmentError('');
+
+    try {
+      await cancelAppointment(appointmentId);
+      await loadAppointments();
+    } catch (error) {
+      setAppointmentError(getErrorMessage(error));
+    }
   }
 
-  function handleAuth(sessionPayload: AuthSession) {
+  function storeSession(sessionPayload: AuthSession) {
     window.localStorage.setItem('authToken', sessionPayload.token);
     window.localStorage.setItem('authEmail', sessionPayload.email);
     window.localStorage.setItem('authName', sessionPayload.name);
     setSession(sessionPayload);
+  }
+
+  async function handleAuth(payload: {
+    mode: 'login' | 'register';
+    name: string;
+    email: string;
+    password: string;
+  }) {
+    setIsAuthenticating(true);
+    setAuthError('');
+
+    try {
+      if (payload.mode === 'register') {
+        await register({
+          name: payload.name,
+          email: payload.email,
+          password: payload.password,
+        });
+      }
+
+      const response = await login({
+        email: payload.email,
+        password: payload.password,
+      });
+
+      storeSession({
+        token: response.token,
+        email: payload.email,
+        name: payload.mode === 'register' ? payload.name : deriveNameFromEmail(payload.email),
+      });
+      await loadAppointments();
+      return true;
+    } catch (error) {
+      setAuthError(getErrorMessage(error));
+      return false;
+    } finally {
+      setIsAuthenticating(false);
+    }
   }
 
   function handleLogout() {
@@ -93,6 +234,7 @@ function App() {
     window.localStorage.removeItem('authEmail');
     window.localStorage.removeItem('authName');
     setSession(null);
+    setAppointments([]);
   }
 
   return (
@@ -127,7 +269,7 @@ function App() {
             <Activity size={18} aria-hidden="true" />
             <span>Backend API</span>
           </div>
-          <strong>Mock mode</strong>
+          <strong>Live</strong>
         </div>
       </aside>
 
@@ -163,6 +305,11 @@ function App() {
                 doctors={doctors}
                 slots={slots}
                 onCreateAppointment={handleCreateAppointment}
+                onLoadSlots={handleLoadSlots}
+                isLoadingCatalogue={isLoadingCatalogue}
+                isLoadingSlots={isLoadingSlots}
+                isCreatingAppointment={isCreatingAppointment}
+                errorMessage={bookingError}
               />
             }
           />
@@ -172,6 +319,8 @@ function App() {
               <AppointmentsView
                 appointments={appointments}
                 onCancelAppointment={handleCancelAppointment}
+                isLoading={isLoadingAppointments}
+                errorMessage={appointmentError}
               />
             }
           />
@@ -182,6 +331,8 @@ function App() {
                 session={session}
                 onAuthenticate={handleAuth}
                 onLogout={handleLogout}
+                isSubmitting={isAuthenticating}
+                errorMessage={authError}
               />
             }
           />
@@ -194,6 +345,11 @@ function App() {
                 doctors={doctors}
                 slots={slots}
                 onCreateAppointment={handleCreateAppointment}
+                onLoadSlots={handleLoadSlots}
+                isLoadingCatalogue={isLoadingCatalogue}
+                isLoadingSlots={isLoadingSlots}
+                isCreatingAppointment={isCreatingAppointment}
+                errorMessage={bookingError}
               />
             }
           />

@@ -13,28 +13,29 @@ This frontend is a functional shell built with:
 - Axios
 - Lucide React icons
 
-It currently runs in mock mode. The UI is interactive, but it does not require the backend APIs to be implemented yet.
+It now integrates with the backend APIs for authentication, catalogue loading, appointment booking, appointment history, and cancellation.
 
 ## What Works Today
 
 The app supports three main views:
 
 - Booking workspace
+  - Load departments and doctors from the backend.
   - Select a department.
   - Select a doctor.
   - Select a date.
-  - Select an available slot.
-  - Request an appointment.
+  - Load available slots from the backend.
+  - Request an appointment through `POST /api/appointments`.
 
 - Appointment history
-  - View local mock appointments.
+  - Fetch appointments from `GET /api/appointments`.
   - See status badges for `CREATED`, `PROCESSING`, `CONFIRMED`, `CANCELLED`, and `FAILED`.
-  - Cancel active appointments in local state.
+  - Cancel active appointments through `DELETE /api/appointments/{appointmentId}`.
 
 - Account access
-  - Switch between sign in and register.
-  - Create a mock authenticated session.
-  - Store a mock token in `localStorage`.
+  - Register through `POST /api/auth/register`.
+  - Sign in through `POST /api/auth/login`.
+  - Store the returned backend token in `localStorage`.
   - Sign out.
 
 ## Design Intent
@@ -49,7 +50,7 @@ The key idea is to keep domain behavior and API expectations explicit:
 - Documented API wrapper functions live in `src/api/appointments.ts`.
 - Views receive state through props instead of importing backend details directly.
 
-This means the UI can be built and reviewed now, and later the mock data can be replaced with real API calls without rewriting the visual workflow.
+This means the UI can use the backend now without depending on Kafka, worker, or database implementation details.
 
 ## Folder Structure
 
@@ -106,7 +107,7 @@ Creates the shared Axios client using `/api` as the base URL. It attaches `local
 
 `src/api/appointments.ts`
 
-Defines wrapper functions for the backend API paths from the project design docs:
+Defines wrapper functions for the backend API paths:
 
 - `POST /api/auth/register`
 - `POST /api/auth/login`
@@ -117,7 +118,7 @@ Defines wrapper functions for the backend API paths from the project design docs
 - `DELETE /api/appointments/{appointmentId}`
 - `GET /api/appointments`
 
-These wrappers are not fully used by the views yet because the backend endpoints are not implemented.
+These wrappers are now used by the views through `App.tsx`.
 
 ## How To Run
 
@@ -155,28 +156,16 @@ http://localhost:5173
 
 Nginx proxies `/api/*` to the backend service inside the Compose network.
 
-This Docker integration proves the frontend can be served with backend routing available, but the UI views are still in mock mode. Auth, catalogue reads, appointment booking, appointment history, and cancellation still need to be wired to the real backend API wrappers.
-
-## Mock Mode
-
-The current implementation uses mock data from `src/data/placeholders.ts`.
-
-This is deliberate. The frontend can be demonstrated and reviewed before backend auth, appointment APIs, Kafka events, and worker processing are complete.
-
-Mock mode keeps the frontend independent from backend design decisions that are still evolving, such as worker idempotency and Kafka `eventId` handling.
+This Docker integration serves the frontend and routes `/api/*` to the backend container.
 
 ## Backend Integration Plan
 
-When backend APIs are ready, the frontend should be integrated in this order:
+The first backend integration pass is complete. The next frontend/backend improvements should be:
 
-1. Replace mock department and doctor reads with `fetchDepartments` and `fetchDoctorsByDepartment`.
-2. Replace mock slot reads with `fetchAvailableSlots`.
-3. Replace mock appointment creation with `createAppointment`.
-4. Replace local cancellation with `cancelAppointment`.
-5. Replace mock auth session with real `register` and `login`.
-6. Add loading, error, and retry handling around each API call.
-
-The views should stay mostly the same. The data source should change, not the user workflow.
+1. Add richer field-level validation and backend error messages.
+2. Refresh appointment status through polling or server push instead of a one-time delayed refresh after booking.
+3. Add automated frontend tests around auth, booking, and cancellation flows.
+4. Replace the development mock-token backend auth with real JWT handling once the backend auth branch is implemented.
 
 ## Architecture Notes
 
@@ -202,20 +191,19 @@ The goal was not to build every integration immediately. The goal was to create 
 
 Important points to explain:
 
-- The UI is functional in mock mode so product behavior can be reviewed early.
+- The UI now calls backend APIs while preserving the original product workflow.
 - React state is centralized in `App.tsx` for now because the app is still small.
-- The API layer already mirrors the documented backend endpoints.
+- The API layer mirrors the documented backend endpoints.
 - Views consume props and domain types, which keeps them easier to adapt later.
-- Appointment status handling is intentionally simple because backend and worker lifecycle rules are still being finalized.
+- Appointment status handling is intentionally simple; the backend and worker own state transitions.
 - The design avoids coupling the frontend to Kafka or worker internals.
 
 As the app grows, state management can be extracted into hooks or a dedicated store, but adding that abstraction now would be premature.
 
 ## Known Limitations
 
-- No real backend API calls are wired into the views yet.
-- Auth uses a mock token.
-- Appointment data resets on page reload except for the mock auth token.
-- No production-grade error handling yet.
+- Auth still depends on the backend's development mock-token implementation.
+- Appointment status refresh after booking is a delayed refresh, not live polling.
+- Error handling is intentionally basic.
 - No automated frontend tests yet.
 - npm audit currently reports dependency findings from the generated dependency tree; dependency remediation should be handled separately and carefully.

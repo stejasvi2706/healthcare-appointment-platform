@@ -327,6 +327,7 @@ h3 {
 }
 
 .success-note,
+.error-note,
 .empty-note {
   margin: 12px 0 0;
   color: #31514f;
@@ -339,6 +340,14 @@ h3 {
   color: #214f49;
   background: #e8f6f2;
   border: 1px solid #cfe8e2;
+  border-radius: 8px;
+}
+
+.error-note {
+  padding: 10px 12px;
+  color: #7c2f2f;
+  background: #fff3f1;
+  border: 1px solid #efc8c2;
   border-radius: 8px;
 }
 
