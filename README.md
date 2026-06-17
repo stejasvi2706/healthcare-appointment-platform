@@ -1,111 +1,61 @@
 # Healthcare Appointment Platform
 
-An event-driven healthcare appointment management platform built using Spring Boot, Kafka, Python, PostgreSQL, React, and Docker.
+Event-driven healthcare appointment management platform built with Spring Boot, Python, Kafka, PostgreSQL, React, and Docker.
 
-## Overview
+## What This Project Demonstrates
 
-This project demonstrates a production-style appointment booking workflow with:
+- User registration and JWT login
+- Appointment slot browsing, booking, cancellation, and history
+- Kafka-based asynchronous appointment processing
+- Python worker that consumes appointment events and updates PostgreSQL
+- Appointment processing timeline visible in the UI
+- Database-level duplicate and overlapping booking protection
+- Swagger/OpenAPI documentation
+- Docker Compose orchestration for the full stack
 
-* JWT-based authentication and authorization
-* Appointment scheduling and management
-* Kafka-based asynchronous event processing
-* Python worker service for notification processing
-* PostgreSQL persistence
-* Dockerized deployment
-* Swagger API documentation
-
-## Features
-
-### Authentication
-
-* Register user
-* Login user
-* JWT-based authorization
-
-### Appointment Management
-
-* Fetch available slots
-* Create appointment
-* Cancel appointment
-* Fetch user appointments
-* Fetch appointment processing history
-* Prevent duplicate and overlapping active appointments
-
-### Event Processing
-
-* Appointment events published to Kafka
-* Python worker consumes events
-* Appointment status updated asynchronously
-* Notification processing represented as an audit event
-* Event history maintained for auditability
-
-## Technology Stack
-
-### Backend
-
-* Java 21
-* Spring Boot 3
-* Spring Security
-* Spring Data JPA
-* PostgreSQL
-* Kafka
-
-### Frontend
-
-* React
-* Vite
-* Axios
-
-### Worker
-
-* Python
-* Kafka Consumer
-
-### Infrastructure
-
-* Docker
-* Docker Compose
-
-## Repository Structure
+## Architecture
 
 ```text
-web/
-  backend/
-  frontend/
-worker/
-broker/
-database/
-docs/
+React Frontend
+    |
+    v
+Spring Boot Backend ----> PostgreSQL
+    |
+    v
+Kafka
+    |
+    v
+Python Worker ---------> PostgreSQL
 ```
 
-## Local Docker Stack
+The backend owns HTTP APIs, authentication, validation, database writes, and Kafka event publishing. The worker owns asynchronous event consumption, idempotent processing, status updates, and notification audit logging.
 
-The project includes a Docker Compose stack for local end-to-end development.
+## Services
 
-Services:
+| Service | Purpose | Local URL |
+| --- | --- | --- |
+| Frontend | React UI served by Nginx | http://localhost:5173 |
+| Backend | Spring Boot REST API | http://localhost:8080 |
+| Swagger UI | API documentation | http://localhost:8080/swagger-ui.html |
+| PostgreSQL | Application database | localhost:5432 |
+| Kafka | Appointment event broker | localhost:9094 |
+| Worker | Python Kafka consumer | Runs in Docker Compose |
 
-* `postgres` - PostgreSQL database on port `5432`
-* `kafka` - single-node Kafka broker, exposed to the host on port `9094`
-* `kafka-init` - creates the `appointment.events` topic
-* `backend` - Spring Boot API on port `8080`
-* `worker` - Python Kafka consumer that updates PostgreSQL directly
-* `frontend` - Nginx-served React build on port `5173`
+## Run The Full Stack
 
-Run from the repository root:
+From the repository root:
 
 ```bash
 docker compose up --build
 ```
 
-Then open:
+Open:
 
 ```text
-Frontend: http://localhost:5173
-Backend health: http://localhost:8080/api/health
-Swagger UI: http://localhost:8080/swagger-ui.html
+http://localhost:5173
 ```
 
-Stop the stack:
+Stop services:
 
 ```bash
 docker compose down
@@ -117,38 +67,81 @@ Reset local data:
 docker compose down -v
 ```
 
-### Verified Local Flow
-
-The Docker stack has been verified end to end:
+## Verified Workflow
 
 ```text
-Register/login -> create appointment -> backend publishes Kafka event -> worker updates PostgreSQL -> appointment becomes CONFIRMED
+Register/login
+    -> fetch departments/doctors/slots
+    -> create appointment
+    -> backend writes CREATED appointment and publishes Kafka event
+    -> worker consumes event
+    -> worker updates appointment to PROCESSING and CONFIRMED
+    -> worker records NOTIFICATION_PROCESSED audit event
+    -> frontend polling displays the final status and processing timeline
 ```
 
-The worker also writes correlated audit rows for:
+## Main API Endpoints
+
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| POST | `/api/auth/register` | Register user |
+| POST | `/api/auth/login` | Login and receive JWT |
+| GET | `/api/departments` | Fetch departments |
+| GET | `/api/departments/{departmentId}/doctors` | Fetch doctors |
+| GET | `/api/doctors/{doctorId}/slots?date=YYYY-MM-DD` | Fetch available slots |
+| GET | `/api/appointments` | Fetch current user's appointments |
+| POST | `/api/appointments` | Create appointment |
+| DELETE | `/api/appointments/{appointmentId}` | Cancel appointment |
+| GET | `/api/appointments/{appointmentId}/events` | Fetch processing timeline |
+
+Appointment APIs require:
 
 ```text
-CREATED -> PROCESSING -> CONFIRMED -> NOTIFICATION_PROCESSED
+Authorization: Bearer <jwt>
 ```
 
-Appointment processing history is available through:
+## Important Documentation
 
-```text
-GET /api/appointments/{appointmentId}/events
+- [Architecture](docs/architecture.md)
+- [Database Design](docs/database-design.md)
+- [API Design](docs/api-design.md)
+- [Implementation Roadmap](docs/implementation-roadmap.md)
+- [Submission Checklist](docs/submission-checklist.md)
+- [Demo Commands](docs/demo-commands.md)
+- [Project Context](docs/project-context.md)
+- [Interview Notes](docs/interview-notes.md)
+- [Backend README](web/backend/README.md)
+- [Frontend README](web/frontend/README.md)
+- [Worker README](worker/README.md)
+
+## Tests
+
+Backend:
+
+```bash
+cd web/backend
+mvn test
 ```
 
-## Documentation
+Frontend:
 
-* docs/architecture.md
-* docs/database-design.md
-* docs/api-design.md
-* docs/implementation-roadmap.md
+```bash
+cd web/frontend
+npm run build
+npm run lint
+```
 
-## Future Enhancements
+Worker:
 
-* Booking by preferred appointment time
-* Automatic doctor assignment
-* Department-based search
-* Notification channels (Email/SMS)
-* Kubernetes deployment
-* CI/CD pipelines
+```bash
+cd worker
+python -m unittest discover -s tests
+```
+
+## Known Limitations
+
+- Notification delivery is simulated through a `NOTIFICATION_PROCESSED` audit event. No real email/SMS provider is integrated.
+- Kafka publishing is after database commit, but not a full transactional outbox.
+- JWT refresh tokens and role-based authorization are not implemented.
+- Frontend polling is fixed interval, not server push.
+- Integration tests against real Kafka/PostgreSQL are not part of the automated test suite.
