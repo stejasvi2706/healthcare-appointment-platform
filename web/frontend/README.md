@@ -141,6 +141,22 @@ npm run build
 npm run lint
 ```
 
+From the repository root with Docker Compose:
+
+```bash
+docker compose up --build frontend
+```
+
+The container serves the built React app through Nginx on:
+
+```text
+http://localhost:5173
+```
+
+Nginx proxies `/api/*` to the backend service inside the Compose network.
+
+This Docker integration proves the frontend can be served with backend routing available, but the UI views are still in mock mode. Auth, catalogue reads, appointment booking, appointment history, and cancellation still need to be wired to the real backend API wrappers.
+
 ## Mock Mode
 
 The current implementation uses mock data from `src/data/placeholders.ts`.

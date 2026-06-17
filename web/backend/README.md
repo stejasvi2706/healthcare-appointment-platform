@@ -183,6 +183,14 @@ Then run:
 mvn spring-boot:run
 ```
 
+From the repository root with Docker Compose:
+
+```bash
+docker compose up --build backend
+```
+
+The full local stack is documented in the root `README.md`.
+
 ## How To Test
 
 From `web/backend`:

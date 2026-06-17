@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
 
@@ -21,5 +21,12 @@ class AppointmentEvent:
             appointment_id=int(payload["appointmentId"]),
             user_id=int(payload["userId"]),
             event_type=str(payload["eventType"]),
-            timestamp=datetime.fromisoformat(str(payload["timestamp"]).replace("Z", "+00:00")),
+            timestamp=parse_timestamp(payload["timestamp"]),
         )
+
+
+def parse_timestamp(value: Any) -> datetime:
+    if isinstance(value, int | float):
+        return datetime.fromtimestamp(value, tz=timezone.utc)
+
+    return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
