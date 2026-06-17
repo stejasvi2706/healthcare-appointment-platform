@@ -40,6 +40,7 @@ Responsibilities:
 * Appointment booking
 * Appointment cancellation
 * Appointment history viewing
+* Processing status viewing
 
 ### Backend
 
@@ -139,6 +140,8 @@ Update Status
         ↓
 Create Audit Log
 ```
+
+The current worker simulates notification delivery by writing a `NOTIFICATION_PROCESSED` audit row after confirmation. A production notification provider can later replace that audit-only step without changing the appointment API contract.
 
 ## Extensibility Considerations
 

@@ -1,6 +1,7 @@
 package com.healthcare.appointment.repositories;
 
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -12,6 +13,8 @@ import com.healthcare.appointment.entities.AppointmentStatus;
 public interface AppointmentRepository extends JpaRepository<Appointment, Long> {
 
     List<Appointment> findByUserIdOrderByCreatedAtDesc(Long userId);
+
+    Optional<Appointment> findByIdAndUserId(Long id, Long userId);
 
     @Query("""
             SELECT COUNT(appointment) > 0

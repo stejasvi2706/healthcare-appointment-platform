@@ -8,6 +8,7 @@ from appointment_worker.models import AppointmentEvent
 APPOINTMENT_CREATED = "APPOINTMENT_CREATED"
 APPOINTMENT_CANCELLED = "APPOINTMENT_CANCELLED"
 STATUS_UPDATED = "STATUS_UPDATED"
+NOTIFICATION_PROCESSED = "NOTIFICATION_PROCESSED"
 
 CREATED = "CREATED"
 PROCESSING = "PROCESSING"
@@ -81,6 +82,7 @@ class AppointmentEventProcessor:
 
         if current_status == PROCESSING:
             self._update_status(connection, event, PROCESSING, CONFIRMED)
+            self._record_notification_processed(connection, event)
 
     def _lock_appointment(self, connection: Any, appointment_id: int) -> str:
         with connection.cursor() as cursor:
@@ -140,5 +142,40 @@ class AppointmentEventProcessor:
             event.appointment_id,
             old_status,
             new_status,
+            extra={"correlation_id": event.correlation_id or "none"},
+        )
+
+    def _record_notification_processed(
+        self,
+        connection: Any,
+        event: AppointmentEvent,
+    ) -> None:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                INSERT INTO appointment_event_logs (
+                    appointment_id,
+                    event_type,
+                    event_id,
+                    correlation_id,
+                    old_status,
+                    new_status,
+                    message
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    event.appointment_id,
+                    NOTIFICATION_PROCESSED,
+                    event.event_id,
+                    event.correlation_id,
+                    CONFIRMED,
+                    CONFIRMED,
+                    "Worker processed appointment notification for the confirmed booking",
+                ),
+            )
+        self.logger.info(
+            "Processed notification for appointment %s",
+            event.appointment_id,
             extra={"correlation_id": event.correlation_id or "none"},
         )

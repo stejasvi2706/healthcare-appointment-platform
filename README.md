@@ -28,12 +28,15 @@ This project demonstrates a production-style appointment booking workflow with:
 * Create appointment
 * Cancel appointment
 * Fetch user appointments
+* Fetch appointment processing history
+* Prevent duplicate and overlapping active appointments
 
 ### Event Processing
 
 * Appointment events published to Kafka
 * Python worker consumes events
 * Appointment status updated asynchronously
+* Notification processing represented as an audit event
 * Event history maintained for auditability
 
 ## Technology Stack
@@ -125,7 +128,13 @@ Register/login -> create appointment -> backend publishes Kafka event -> worker 
 The worker also writes correlated audit rows for:
 
 ```text
-CREATED -> PROCESSING -> CONFIRMED
+CREATED -> PROCESSING -> CONFIRMED -> NOTIFICATION_PROCESSED
+```
+
+Appointment processing history is available through:
+
+```text
+GET /api/appointments/{appointmentId}/events
 ```
 
 ## Documentation

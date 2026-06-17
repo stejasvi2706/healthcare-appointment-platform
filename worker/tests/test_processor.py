@@ -99,9 +99,10 @@ class AppointmentEventProcessorTest(unittest.TestCase):
         self.assertEqual("processed", result)
         self.assertEqual("CONFIRMED", connection.appointments[123])
         self.assertEqual([(EVENT_ID, "APPOINTMENT_CREATED", 123)], connection.processed_events)
-        self.assertEqual(2, len(connection.event_logs))
+        self.assertEqual(3, len(connection.event_logs))
         self.assertEqual("PROCESSING", connection.event_logs[0][5])
         self.assertEqual("CONFIRMED", connection.event_logs[1][5])
+        self.assertEqual("NOTIFICATION_PROCESSED", connection.event_logs[2][1])
         self.assertEqual("correlation-123", connection.event_logs[0][3])
 
     def test_duplicate_event_skips_side_effects(self):
