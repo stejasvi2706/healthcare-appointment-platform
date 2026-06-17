@@ -43,7 +43,7 @@ The backend currently supports:
   - `POST /api/appointments`
   - `DELETE /api/appointments/{appointmentId}`
 
-The appointment APIs write to PostgreSQL using JPA repositories and rely on the database partial unique index to prevent duplicate active bookings for the same slot.
+The appointment APIs write to PostgreSQL using JPA repositories. They rely on the database partial unique index to prevent duplicate active bookings for the same slot, and the service layer also prevents the same user from holding overlapping active appointments across different doctors.
 
 Appointment create and cancel operations also publish Kafka events after the database transaction commits.
 
@@ -112,7 +112,7 @@ Handles registration, password hashing, and mock-token login.
 
 `services/AppointmentService.java`
 
-Handles database-backed appointment creation, cancellation, event log creation, and appointment event publishing.
+Handles database-backed appointment creation, cancellation, event log creation, and appointment event publishing. It also enforces the user-level scheduling rule that a patient cannot hold two active appointments with overlapping time windows.
 
 `services/AppointmentEventPublisher.java`
 
@@ -337,6 +337,7 @@ Important points to explain:
 
 - Flyway owns schema changes; Hibernate validates the schema.
 - Duplicate active bookings are prevented by a PostgreSQL partial unique index.
+- Same-user overlapping active appointments are prevented in the service layer, even when the slots belong to different doctors.
 - The service layer catches duplicate booking conflicts and returns a user-friendly error.
 - Appointment lifecycle is intentionally simple until Kafka/worker status processing is implemented.
 - Mock-token auth is a development bridge, not production security.

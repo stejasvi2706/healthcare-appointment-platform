@@ -25,6 +25,7 @@ The app supports three main views:
   - Select a doctor.
   - Select a date.
   - Load available slots from the backend.
+  - Hide time windows that overlap with the user's active appointments.
   - Request an appointment through `POST /api/appointments`.
 
 - Appointment history
@@ -91,7 +92,7 @@ It wires the main views together through React Router.
 
 `src/views/BookingView.tsx`
 
-Implements the booking workflow. It filters doctors by department, filters available slots by selected doctor/date, hides already-active slots, and sends selected slot IDs back to the app state.
+Implements the booking workflow. It filters doctors by department, filters available slots by selected doctor/date, hides slots that overlap with the user's active appointments, and sends selected slot IDs back to the app state.
 
 `src/views/AppointmentsView.tsx`
 
