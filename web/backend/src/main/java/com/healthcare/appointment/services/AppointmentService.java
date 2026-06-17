@@ -23,6 +23,12 @@ import com.healthcare.appointment.repositories.AppointmentSlotRepository;
 @Service
 public class AppointmentService {
 
+    private static final List<AppointmentStatus> ACTIVE_STATUSES = List.of(
+            AppointmentStatus.CREATED,
+            AppointmentStatus.PROCESSING,
+            AppointmentStatus.CONFIRMED
+    );
+
     private final AppointmentRepository appointmentRepository;
     private final AppointmentSlotRepository appointmentSlotRepository;
     private final AppointmentEventLogRepository eventLogRepository;
@@ -58,6 +64,16 @@ public class AppointmentService {
 
         AppointmentSlot slot = appointmentSlotRepository.findById(request.slotId())
                 .orElseThrow(() -> new NotFoundException("Appointment slot not found."));
+
+        if (appointmentRepository.existsActiveOverlapForUser(
+                user.getId(),
+                slot.getStartDatetime(),
+                slot.getEndDatetime(),
+                ACTIVE_STATUSES
+        )) {
+            throw new BadRequestException("You already have an active appointment during this time.");
+        }
+
         Appointment appointment = new Appointment(user, slot, AppointmentStatus.CREATED);
 
         try {

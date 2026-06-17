@@ -3,7 +3,9 @@ import type { Appointment, AppointmentStatus } from '../types/domain';
 
 interface AppointmentsViewProps {
   appointments: Appointment[];
-  onCancelAppointment: (appointmentId: number) => void;
+  onCancelAppointment: (appointmentId: number) => Promise<void>;
+  isLoading: boolean;
+  errorMessage: string;
 }
 
 const statusLabels: Record<AppointmentStatus, string> = {
@@ -36,6 +38,8 @@ function formatAppointmentTime(start: string, end: string) {
 export function AppointmentsView({
   appointments,
   onCancelAppointment,
+  isLoading,
+  errorMessage,
 }: AppointmentsViewProps) {
   return (
     <section className="panel">
@@ -46,6 +50,13 @@ export function AppointmentsView({
         </div>
         <ClipboardList size={22} aria-hidden="true" />
       </div>
+
+      {isLoading && <p className="empty-note">Loading appointments...</p>}
+      {errorMessage && (
+        <p className="error-note" role="alert">
+          {errorMessage}
+        </p>
+      )}
 
       <div className="appointment-list">
         {appointments.length === 0 && (
