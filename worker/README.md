@@ -33,6 +33,8 @@ The worker handles this by inserting the incoming `eventId` into `processed_even
 
 This is why `eventId` is not used as the tracing ID. It identifies one event for deduplication. `correlationId` identifies the broader request/workflow across frontend, backend, Kafka, and worker logs.
 
+The worker accepts backend event timestamps as ISO strings or numeric epoch values. The numeric path is required because Spring Kafka serializes Java `Instant` values as epoch seconds in the current backend configuration.
+
 ## Direct Database Updates
 
 The worker updates PostgreSQL directly instead of calling backend APIs.
@@ -95,6 +97,14 @@ Run the worker:
 ```bash
 python -m appointment_worker.main
 ```
+
+From the repository root with Docker Compose:
+
+```bash
+docker compose up --build worker
+```
+
+The worker container connects to the Compose `postgres` and `kafka` services using internal service names.
 
 ## Interview Explanation
 

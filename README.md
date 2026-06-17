@@ -67,16 +67,65 @@ This project demonstrates a production-style appointment booking workflow with:
 
 ```text
 web/
-├── backend/
-└── frontend/
-
+  backend/
+  frontend/
 worker/
-
 broker/
-
 database/
-
 docs/
+```
+
+## Local Docker Stack
+
+The project includes a Docker Compose stack for local end-to-end development.
+
+Services:
+
+* `postgres` - PostgreSQL database on port `5432`
+* `kafka` - single-node Kafka broker, exposed to the host on port `9094`
+* `kafka-init` - creates the `appointment.events` topic
+* `backend` - Spring Boot API on port `8080`
+* `worker` - Python Kafka consumer that updates PostgreSQL directly
+* `frontend` - Nginx-served React build on port `5173`
+
+Run from the repository root:
+
+```bash
+docker compose up --build
+```
+
+Then open:
+
+```text
+Frontend: http://localhost:5173
+Backend health: http://localhost:8080/api/health
+Swagger UI: http://localhost:8080/swagger-ui.html
+```
+
+Stop the stack:
+
+```bash
+docker compose down
+```
+
+Reset local data:
+
+```bash
+docker compose down -v
+```
+
+### Verified Local Flow
+
+The Docker stack has been verified end to end:
+
+```text
+Register/login -> create appointment -> backend publishes Kafka event -> worker updates PostgreSQL -> appointment becomes CONFIRMED
+```
+
+The worker also writes correlated audit rows for:
+
+```text
+CREATED -> PROCESSING -> CONFIRMED
 ```
 
 ## Documentation

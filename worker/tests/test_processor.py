@@ -133,6 +133,21 @@ class AppointmentEventProcessorTest(unittest.TestCase):
         self.assertEqual(456, event.user_id)
         self.assertEqual("APPOINTMENT_CREATED", event.event_type)
 
+    def test_event_parser_accepts_numeric_epoch_timestamp_from_kafka(self):
+        event = AppointmentEvent.from_dict(
+            {
+                "eventId": "11111111-1111-1111-1111-111111111111",
+                "correlationId": "correlation-123",
+                "appointmentId": 123,
+                "userId": 456,
+                "eventType": "APPOINTMENT_CREATED",
+                "timestamp": 1781675632.8853087,
+            }
+        )
+
+        self.assertEqual(2026, event.timestamp.year)
+        self.assertEqual(timezone.utc, event.timestamp.tzinfo)
+
 
 if __name__ == "__main__":
     unittest.main()
