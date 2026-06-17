@@ -38,6 +38,8 @@ const navigation = [
   { to: '/auth', label: 'Access', icon: LogIn },
 ];
 
+const APPOINTMENT_REFRESH_INTERVAL_MS = 3000;
+
 function getErrorMessage(error: unknown) {
   if (axios.isAxiosError(error)) {
     const responseData = error.response?.data;
@@ -101,8 +103,10 @@ function App() {
     [appointments, departments],
   );
 
-  const loadAppointments = useCallback(async () => {
-    setIsLoadingAppointments(true);
+  const loadAppointments = useCallback(async (options: { silent?: boolean } = {}) => {
+    if (!options.silent) {
+      setIsLoadingAppointments(true);
+    }
     setAppointmentError('');
 
     try {
@@ -110,7 +114,9 @@ function App() {
     } catch (error) {
       setAppointmentError(getErrorMessage(error));
     } finally {
-      setIsLoadingAppointments(false);
+      if (!options.silent) {
+        setIsLoadingAppointments(false);
+      }
     }
   }, []);
 
@@ -135,8 +141,21 @@ function App() {
     }
 
     void loadCatalogue();
+  }, []);
+
+  useEffect(() => {
+    if (!session) {
+      return undefined;
+    }
+
     void loadAppointments();
-  }, [loadAppointments]);
+
+    const intervalId = window.setInterval(() => {
+      void loadAppointments({ silent: true });
+    }, APPOINTMENT_REFRESH_INTERVAL_MS);
+
+    return () => window.clearInterval(intervalId);
+  }, [loadAppointments, session]);
 
   const handleLoadSlots = useCallback(async (doctorId: number, date: string) => {
     setIsLoadingSlots(true);
@@ -160,10 +179,7 @@ function App() {
       const appointment = await createAppointment({ slotId });
       setAppointments((current) => [appointment, ...current]);
       setSlots((current) => current.filter((slot) => slot.id !== slotId));
-      await loadAppointments();
-      window.setTimeout(() => {
-        void loadAppointments();
-      }, 2500);
+      await loadAppointments({ silent: true });
       return true;
     } catch (error) {
       setBookingError(getErrorMessage(error));

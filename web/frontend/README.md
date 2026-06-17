@@ -30,6 +30,7 @@ The app supports three main views:
 
 - Appointment history
   - Fetch appointments from `GET /api/appointments`.
+  - Poll appointments while signed in so worker-driven status changes appear automatically.
   - See status badges for `CREATED`, `PROCESSING`, `CONFIRMED`, `CANCELLED`, and `FAILED`.
   - Cancel active appointments through `DELETE /api/appointments/{appointmentId}`.
 
@@ -88,7 +89,7 @@ Owns the current application state. It stores:
 - auth session
 - summary counts
 
-It wires the main views together through React Router.
+It wires the main views together through React Router and refreshes appointment history on a fixed interval while a user is signed in.
 
 `src/views/BookingView.tsx`
 
@@ -164,7 +165,7 @@ This Docker integration serves the frontend and routes `/api/*` to the backend c
 The first backend integration pass is complete. The next frontend/backend improvements should be:
 
 1. Add richer field-level validation and backend error messages.
-2. Refresh appointment status through polling or server push instead of a one-time delayed refresh after booking.
+2. Add smarter polling behavior such as backoff, visibility-aware refresh, or server push if the backend later supports it.
 3. Add automated frontend tests around auth, booking, and cancellation flows.
 4. Add refresh-token/session-expiry handling once the backend supports it.
 
@@ -197,6 +198,7 @@ Important points to explain:
 - The API layer mirrors the documented backend endpoints.
 - Views consume props and domain types, which keeps them easier to adapt later.
 - Appointment status handling is intentionally simple; the backend and worker own state transitions.
+- The frontend polls appointment history while signed in because the worker updates appointment status asynchronously through the database.
 - The design avoids coupling the frontend to Kafka or worker internals.
 
 As the app grows, state management can be extracted into hooks or a dedicated store, but adding that abstraction now would be premature.
@@ -204,7 +206,7 @@ As the app grows, state management can be extracted into hooks or a dedicated st
 ## Known Limitations
 
 - Auth uses the backend JWT returned from login, but there is no refresh-token/session-expiry handling yet.
-- Appointment status refresh after booking is a delayed refresh, not live polling.
+- Appointment status refresh uses fixed-interval polling, not server push or visibility-aware backoff.
 - Error handling is intentionally basic.
 - No automated frontend tests yet.
 - npm audit currently reports dependency findings from the generated dependency tree; dependency remediation should be handled separately and carefully.
