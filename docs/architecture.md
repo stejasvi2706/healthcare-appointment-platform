@@ -1,156 +1,97 @@
-# Architecture Design
+# Architecture
 
-## System Overview
-
-The system consists of four major components:
-
-1. React Frontend
-2. Spring Boot Backend
-3. Kafka Message Broker
-4. Python Worker Service
-
-## High Level Architecture
+## Components
 
 ```text
-Frontend
-    │
-    ▼
-Spring Boot Backend
-    │
-    ├────────► PostgreSQL
-    │
-    ▼
+React Frontend
+    |
+    v
+Spring Boot Backend ----> PostgreSQL
+    |
+    v
 Kafka
-    │
-    ▼
-Python Worker
-    │
-    ▼
-PostgreSQL
+    |
+    v
+Python Worker ---------> PostgreSQL
 ```
 
-## Component Responsibilities
+## Responsibilities
 
-### Frontend
+| Component | Responsibilities |
+| --- | --- |
+| React frontend | Login/register, slot selection, booking, cancellation, appointment history, processing timeline |
+| Spring Boot backend | REST APIs, JWT authentication, validation, database writes, Kafka event publishing, Swagger docs |
+| PostgreSQL | Users, doctors, slots, appointments, event logs, idempotency records, booking constraints |
+| Kafka | Appointment event transport between backend and worker |
+| Python worker | Kafka consumption, idempotency, status transitions, notification audit event, direct DB updates |
 
-Responsibilities:
-
-* User authentication
-* Slot browsing
-* Appointment booking
-* Appointment cancellation
-* Appointment history viewing
-* Processing status viewing
-
-### Backend
-
-Responsibilities:
-
-* Authentication
-* Authorization
-* Appointment management
-* Slot retrieval
-* Kafka event publishing
-* Business validation
-
-### Kafka
-
-Responsibilities:
-
-* Event transport
-* Decoupling backend and worker service
-
-### Python Worker
-
-Responsibilities:
-
-* Consume appointment events
-* Process notifications
-* Update appointment status
-* Generate audit logs
-
-## User Journey
-
-### Appointment Booking
+## Booking Flow
 
 ```text
-Login
-    ↓
-Select Department
-    ↓
-Select Doctor
-    ↓
-Select Date
-    ↓
-Select Slot
-    ↓
-Book Appointment
+User submits appointment request
+    |
+    v
+Backend validates JWT and slot
+    |
+    v
+Backend checks active overlapping appointments
+    |
+    v
+PostgreSQL enforces slot and user-overlap constraints
+    |
+    v
+Backend stores appointment as CREATED
+    |
+    v
+Backend publishes APPOINTMENT_CREATED event after commit
+    |
+    v
+Worker consumes event from Kafka
+    |
+    v
+Worker records eventId in processed_events
+    |
+    v
+Worker updates appointment CREATED -> PROCESSING -> CONFIRMED
+    |
+    v
+Worker writes NOTIFICATION_PROCESSED audit event
+    |
+    v
+Frontend polling shows updated status and timeline
 ```
 
-### Appointment Cancellation
+## Cancellation Flow
 
 ```text
-My Appointments
-    ↓
-Cancel Appointment
+User cancels appointment
+    |
+    v
+Backend validates ownership
+    |
+    v
+Backend sets appointment to CANCELLED
+    |
+    v
+Backend writes event log and publishes APPOINTMENT_CANCELLED
+    |
+    v
+Worker records event as processed and skips status mutation
 ```
 
-## Appointment Lifecycle
+## Event Identity And Tracing
 
-```text
-CREATED
-    ↓
-PROCESSING
-    ↓
-CONFIRMED
-```
+The platform uses two identifiers for different purposes:
 
-Failure Flow:
+- `eventId`: unique per Kafka event; used for worker idempotency.
+- `correlationId`: shared across one user workflow; used for logs and audit traceability.
 
-```text
-CREATED
-    ↓
-PROCESSING
-    ↓
-FAILED
-```
+This keeps duplicate message handling separate from request tracing.
 
-Cancellation Flow:
+## Why The Worker Updates The Database Directly
 
-```text
-CONFIRMED
-    ↓
-CANCELLED
-```
+The worker writes directly to PostgreSQL so idempotency, status updates, and audit log inserts happen in one transaction. This avoids an additional backend HTTP retry path and keeps duplicate Kafka delivery easy to reason about.
 
-## Event Flow
+## Current Notification Design
 
-```text
-Appointment Created
-        ↓
-Publish Kafka Event
-        ↓
-Kafka Topic
-        ↓
-Python Worker
-        ↓
-Process Notification
-        ↓
-Update Status
-        ↓
-Create Audit Log
-```
-
-The current worker simulates notification delivery by writing a `NOTIFICATION_PROCESSED` audit row after confirmation. A production notification provider can later replace that audit-only step without changing the appointment API contract.
-
-## Extensibility Considerations
-
-The schema is designed to support:
-
-* Department-based filtering
-* Doctor-based scheduling
-* Booking by preferred time
-* Automatic doctor assignment
-* Multi-clinic support
-
-without requiring major schema changes.
+The assignment asks for notification processing. This implementation records notification processing as a `NOTIFICATION_PROCESSED` audit event after confirmation. That demonstrates the asynchronous notification step without adding a real email/SMS provider.

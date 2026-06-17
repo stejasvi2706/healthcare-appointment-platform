@@ -1,10 +1,8 @@
 # Frontend
 
-React frontend for the Healthcare Appointment Platform.
+React/Vite UI for the healthcare appointment platform.
 
-## Current Scope
-
-This frontend is a functional shell built with:
+## Stack
 
 - React
 - TypeScript
@@ -13,206 +11,121 @@ This frontend is a functional shell built with:
 - Axios
 - Lucide React icons
 
-It now integrates with the backend APIs for authentication, catalogue loading, appointment booking, appointment history, and cancellation.
+## Responsibilities
 
-## What Works Today
+- Register and login users
+- Store the backend JWT in `localStorage`
+- Fetch departments, doctors, and slots
+- Book appointments
+- Hide slots that overlap with active appointments
+- List appointments and statuses
+- Poll appointments so worker-driven status changes appear automatically
+- Show backend/worker processing timeline
+- Cancel active appointments
+- Clear expired sessions when protected APIs return `401` or `403`
 
-The app supports three main views:
+## Screens
 
-- Booking workspace
-  - Load departments and doctors from the backend.
-  - Select a department.
-  - Select a doctor.
-  - Select a date.
-  - Load available slots from the backend.
-  - Hide time windows that overlap with the user's active appointments.
-  - Request an appointment through `POST /api/appointments`.
+| Route | Purpose |
+| --- | --- |
+| `/` | Booking workspace |
+| `/appointments` | Appointment history and processing timeline |
+| `/auth` | Register, login, and sign out |
 
-- Appointment history
-  - Fetch appointments from `GET /api/appointments`.
-  - Poll appointments while signed in so worker-driven status changes appear automatically.
-  - Fetch appointment processing events from `GET /api/appointments/{appointmentId}/events`.
-  - Show a processing timeline for status updates and notification processing.
-  - See status badges for `CREATED`, `PROCESSING`, `CONFIRMED`, `CANCELLED`, and `FAILED`.
-  - Cancel active appointments through `DELETE /api/appointments/{appointmentId}`.
+## API Integration
 
-- Account access
-  - Register through `POST /api/auth/register`.
-  - Sign in through `POST /api/auth/login`.
-  - Store the returned backend token in `localStorage`.
-  - Clear expired or invalid sessions when protected appointment APIs return `401` or `403`.
-  - Sign out.
+The frontend calls the backend through `/api`, proxied by Nginx in Docker Compose.
 
-## Design Intent
-
-The frontend is intentionally minimal but functional. It gives a usable product surface before the backend APIs are fully implemented, while keeping future backend integration low-risk.
-
-The key idea is to keep domain behavior and API expectations explicit:
-
-- Domain types live in `src/types/domain.ts`.
-- Placeholder data lives in `src/data/placeholders.ts`.
-- HTTP client setup lives in `src/api/client.ts`.
-- Documented API wrapper functions live in `src/api/appointments.ts`.
-- Views receive state through props instead of importing backend details directly.
-
-This means the UI can use the backend now without depending on Kafka, worker, or database implementation details.
-
-## Folder Structure
+Implemented API wrappers live in:
 
 ```text
-web/frontend/
-├── src/
-│   ├── api/
-│   │   ├── appointments.ts
-│   │   └── client.ts
-│   ├── data/
-│   │   └── placeholders.ts
-│   ├── types/
-│   │   └── domain.ts
-│   ├── views/
-│   │   ├── AppointmentsView.tsx
-│   │   ├── AuthView.tsx
-│   │   └── BookingView.tsx
-│   ├── App.tsx
-│   ├── main.tsx
-│   └── styles.css
-├── index.html
-├── package.json
-├── vite.config.ts
-└── tsconfig*.json
+src/api/appointments.ts
 ```
 
-## Important Files
-
-`src/App.tsx`
-
-Owns the current application state. It stores:
-
-- appointments
-- auth session
-- summary counts
-
-It wires the main views together through React Router, refreshes appointment history on a fixed interval while a user is signed in, and clears the local session when protected appointment APIs reject the stored token.
-
-`src/views/BookingView.tsx`
-
-Implements the booking workflow. It filters doctors by department, filters available slots by selected doctor/date, hides slots that overlap with the user's active appointments, and sends selected slot IDs back to the app state.
-
-`src/views/AppointmentsView.tsx`
-
-Shows appointment history, renders the backend/worker processing timeline, and cancels active appointments through the backend API.
-
-`src/views/AuthView.tsx`
-
-Implements controlled login/register forms backed by the backend auth API. Once signed in, the sign-in/register form is hidden and only sign-out remains available.
-
-`src/api/client.ts`
-
-Creates the shared Axios client using `/api` as the base URL. It attaches `localStorage.authToken` as a bearer token when present.
-
-`src/api/appointments.ts`
-
-Defines wrapper functions for the backend API paths:
+Wrapped endpoints:
 
 - `POST /api/auth/register`
 - `POST /api/auth/login`
 - `GET /api/departments`
 - `GET /api/departments/{departmentId}/doctors`
 - `GET /api/doctors/{doctorId}/slots?date=YYYY-MM-DD`
+- `GET /api/appointments`
 - `POST /api/appointments`
 - `DELETE /api/appointments/{appointmentId}`
-- `GET /api/appointments`
 - `GET /api/appointments/{appointmentId}/events`
 
-These wrappers are now used by the views through `App.tsx`.
+## Project Structure
 
-## How To Run
+```text
+web/frontend/
+  src/
+    api/
+      appointments.ts
+      client.ts
+    data/
+      placeholders.ts
+    types/
+      domain.ts
+    views/
+      AppointmentsView.tsx
+      AuthView.tsx
+      BookingView.tsx
+    App.tsx
+    main.tsx
+    styles.css
+  index.html
+  package.json
+  vite.config.ts
+```
 
-From `web/frontend`:
+## Important Files
+
+| File | Purpose |
+| --- | --- |
+| `src/App.tsx` | Owns app state, polling, auth session, and view wiring |
+| `src/views/BookingView.tsx` | Department/doctor/date/slot selection and booking |
+| `src/views/AppointmentsView.tsx` | Appointment list, cancellation, and processing timeline |
+| `src/views/AuthView.tsx` | Login/register/sign-out UI |
+| `src/api/client.ts` | Axios client and bearer-token attachment |
+| `src/types/domain.ts` | Frontend domain types matching backend payloads |
+
+## Run Locally
 
 ```bash
 npm install
 npm run dev
 ```
 
-The Vite dev server will print the local URL. Commonly:
+Common Vite URL:
 
 ```text
 http://localhost:5173
 ```
 
-To build and verify:
+Run through Docker Compose from the repository root:
+
+```bash
+docker compose up --build frontend
+```
+
+## Verify
 
 ```bash
 npm run build
 npm run lint
 ```
 
-From the repository root with Docker Compose:
+## Interview Notes
 
-```bash
-docker compose up --build frontend
-```
-
-The container serves the built React app through Nginx on:
-
-```text
-http://localhost:5173
-```
-
-Nginx proxies `/api/*` to the backend service inside the Compose network.
-
-This Docker integration serves the frontend and routes `/api/*` to the backend container.
-
-## Backend Integration Plan
-
-The first backend integration pass is complete. The next frontend/backend improvements should be:
-
-1. Add richer field-level validation and backend error messages.
-2. Add smarter polling behavior such as backoff, visibility-aware refresh, or server push if the backend later supports it.
-3. Add automated frontend tests around auth, booking, and cancellation flows.
-4. Add refresh-token renewal once the backend supports it.
-
-## Architecture Notes
-
-The frontend does not know about Kafka, the Python worker, or internal database tables. It only models the public user-facing workflow.
-
-This separation is important because backend architecture may change without requiring the frontend to change. For example, adding `eventId` idempotency to the worker should not affect the frontend unless the public appointment API changes.
-
-The frontend currently treats appointment statuses as display values:
-
-- `CREATED`
-- `PROCESSING`
-- `CONFIRMED`
-- `CANCELLED`
-- `FAILED`
-
-It does not encode complex business rules around status transitions. Those rules belong in the backend and worker.
-
-## Interview Explanation
-
-This frontend was built as an incremental product shell.
-
-The goal was not to build every integration immediately. The goal was to create a usable workflow while keeping clear boundaries between UI, domain types, mock data, and future API calls.
-
-Important points to explain:
-
-- The UI now calls backend APIs while preserving the original product workflow.
-- React state is centralized in `App.tsx` for now because the app is still small.
-- The API layer mirrors the documented backend endpoints.
-- Views consume props and domain types, which keeps them easier to adapt later.
-- Appointment status handling is intentionally simple; the backend and worker own state transitions.
-- The frontend polls appointment history while signed in because the worker updates appointment status asynchronously through the database.
-- The processing timeline is read from backend audit events, so the UI can show Kafka/worker progress without knowing Kafka internals.
-- Expired sessions are handled at the protected workflow boundary: appointment API `401/403` responses clear local auth state and ask the user to sign in again.
-- The design avoids coupling the frontend to Kafka or worker internals.
-
-As the app grows, state management can be extracted into hooks or a dedicated store, but adding that abstraction now would be premature.
+- The frontend is intentionally thin. Backend and worker own business rules and state transitions.
+- `App.tsx` centralizes state because the app is small; a store or query library would be premature for this assignment.
+- Appointment status is refreshed through polling because the backend/worker workflow is asynchronous.
+- The processing timeline reads backend audit events. The UI does not need to know Kafka internals.
+- Session-expiry handling is at the protected API boundary: `401/403` clears local auth and asks the user to sign in again.
 
 ## Known Limitations
 
-- Auth uses the backend JWT returned from login, but there is no refresh-token renewal yet.
-- Appointment status refresh uses fixed-interval polling, not server push or visibility-aware backoff.
-- Error handling is intentionally basic.
+- No refresh-token flow.
+- Appointment refresh uses fixed-interval polling, not server push.
 - No automated frontend tests yet.
-- npm audit currently reports dependency findings from the generated dependency tree; dependency remediation should be handled separately and carefully.
+- npm audit reports dependency findings from the generated dependency tree; dependency remediation should be handled separately.

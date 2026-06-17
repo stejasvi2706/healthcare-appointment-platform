@@ -1,5 +1,11 @@
 # API Design
 
+Swagger UI is available when the backend is running:
+
+```text
+http://localhost:8080/swagger-ui.html
+```
+
 ## Authentication
 
 ### Register
@@ -8,81 +14,102 @@
 POST /api/auth/register
 ```
 
+Request:
+
+```json
+{
+  "name": "Patient Demo",
+  "email": "patient@example.com",
+  "password": "password123"
+}
+```
+
 ### Login
 
 ```http
 POST /api/auth/login
 ```
 
-Returns JWT token.
+Returns:
 
----
-
-## Department APIs
-
-### Fetch Departments
-
-```http
-GET /api/departments
+```json
+{
+  "token": "jwt-token"
+}
 ```
 
----
-
-## Doctor APIs
-
-### Fetch Doctors By Department
+Appointment APIs require:
 
 ```http
-GET /api/departments/{departmentId}/doctors
+Authorization: Bearer <jwt-token>
 ```
 
----
+## Catalogue APIs
 
-## Slot APIs
-
-### Fetch Available Slots
-
-```http
-GET /api/doctors/{doctorId}/slots?date=YYYY-MM-DD
-```
-
-Returns available slots for a doctor on a specific date.
-
----
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| GET | `/api/departments` | Fetch departments |
+| GET | `/api/departments/{departmentId}/doctors` | Fetch doctors by department |
+| GET | `/api/doctors/{doctorId}/slots?date=YYYY-MM-DD` | Fetch available slots |
 
 ## Appointment APIs
 
-### Create Appointment
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| GET | `/api/appointments` | Fetch current user's appointments |
+| POST | `/api/appointments` | Create appointment |
+| DELETE | `/api/appointments/{appointmentId}` | Cancel appointment |
+| GET | `/api/appointments/{appointmentId}/events` | Fetch appointment processing timeline |
 
-```http
-POST /api/appointments
+Create appointment request:
+
+```json
+{
+  "slotId": 1
+}
 ```
 
-### Cancel Appointment
+Appointment response:
 
-```http
-DELETE /api/appointments/{appointmentId}
+```json
+{
+  "id": 1,
+  "slotId": 1,
+  "status": "CONFIRMED",
+  "departmentName": "Cardiology",
+  "doctorName": "Dr. Asha Mehta",
+  "specialization": "Interventional Cardiology",
+  "startDatetime": "2026-06-18T09:00:00Z",
+  "endDatetime": "2026-06-18T09:30:00Z"
+}
 ```
 
-### Fetch User Appointments
+Event history response:
 
-```http
-GET /api/appointments
+```json
+[
+  {
+    "id": 1,
+    "eventType": "APPOINTMENT_CREATED",
+    "eventId": "uuid",
+    "correlationId": "uuid",
+    "oldStatus": null,
+    "newStatus": "CREATED",
+    "message": "Appointment request created.",
+    "createdAt": "2026-06-17T10:00:00Z"
+  }
+]
 ```
 
-Returns appointments belonging to the authenticated user.
+## Kafka Event Contract
 
-### Fetch Appointment Event History
+Topic:
 
-```http
-GET /api/appointments/{appointmentId}/events
+```text
+appointment.events
 ```
 
-Returns processing/audit events for one appointment belonging to the authenticated user.
-
-## Event Contract
-
-### Appointment Created
+Created/cancelled event payload:
 
 ```json
 {
@@ -95,15 +122,11 @@ Returns processing/audit events for one appointment belonging to the authenticat
 }
 ```
 
-### Appointment Cancelled
+Supported event types:
 
-```json
-{
-  "eventId": "uuid",
-  "correlationId": "uuid-or-client-provided-id",
-  "appointmentId": 123,
-  "userId": 456,
-  "eventType": "APPOINTMENT_CANCELLED",
-  "timestamp": "2026-06-17T10:00:00Z"
-}
+```text
+APPOINTMENT_CREATED
+APPOINTMENT_CANCELLED
 ```
+
+The worker writes status and notification audit rows to `appointment_event_logs`.

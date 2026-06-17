@@ -1,173 +1,149 @@
 # Database Design
 
-## User
+PostgreSQL is the source of truth for users, catalogue data, appointments, audit logs, and worker idempotency.
 
-```sql
+## Tables
+
+### `users`
+
+```text
 id
 name
 email
 password_hash
-
 created_at
 updated_at
 ```
 
-## Department
+`email` is unique.
 
-```sql
+### `departments`
+
+```text
 id
 name
-
 created_at
 updated_at
 ```
 
-Examples:
+Seeded examples include Cardiology, Dermatology, Neurology, Orthopedics, and General Medicine.
 
-* Cardiology
-* Dermatology
-* Neurology
-* Orthopedics
-* General Medicine
+### `doctors`
 
-## Doctor
-
-```sql
+```text
 id
 department_id
-
 name
 specialization
-
 created_at
 updated_at
 ```
 
-## Appointment Slot
+Each doctor belongs to one department.
 
-```sql
+### `appointment_slots`
+
+```text
 id
 doctor_id
-
 start_datetime
 end_datetime
-
 created_at
 updated_at
 ```
 
-Slots are pre-generated.
+Slots are pre-generated and belong to one doctor.
 
-Each slot belongs to exactly one doctor.
+### `appointments`
 
-## Appointment
-
-```sql
+```text
 id
-
 user_id
 slot_id
-
 start_datetime
 end_datetime
-
 status
-
 created_at
 updated_at
 ```
 
-Status Values:
+`start_datetime` and `end_datetime` are copied from the selected slot by a database trigger. They allow PostgreSQL to enforce same-user overlap protection directly on the appointment table.
 
-* CREATED
-* PROCESSING
-* CONFIRMED
-* CANCELLED
-* FAILED
+Valid statuses:
 
-## Appointment Event Log
+```text
+CREATED
+PROCESSING
+CONFIRMED
+CANCELLED
+FAILED
+```
 
-```sql
+### `appointment_event_logs`
+
+```text
 id
-
 appointment_id
-
 event_type
 event_id
 correlation_id
-
 old_status
 new_status
-
 message
-
 created_at
 ```
 
-## Relationships
+This table stores the appointment audit timeline shown in the frontend.
+
+### `processed_events`
 
 ```text
-Department
-    │
-    ▼
-Doctor
-    │
-    ▼
-AppointmentSlot
-    │
-    ▼
-Appointment
-    │
-    ▼
-AppointmentEventLog
-
-User
- │
- ▼
-Appointment
+event_id
+event_type
+appointment_id
+processed_at
 ```
 
-## Duplicate Booking Prevention
+The worker inserts `eventId` here before applying side effects. Duplicate Kafka deliveries conflict on `event_id` and are skipped.
 
-The system prevents duplicate bookings using a database-level constraint.
+## Booking Constraints
 
-Example PostgreSQL partial unique index:
+### One Active Appointment Per Slot
 
 ```sql
 CREATE UNIQUE INDEX uk_active_slot
-ON appointment(slot_id)
-WHERE status IN (
-    'CREATED',
-    'PROCESSING',
-    'CONFIRMED'
-);
+ON appointments(slot_id)
+WHERE status IN ('CREATED', 'PROCESSING', 'CONFIRMED');
 ```
 
-This guarantees:
+This prevents two active appointments from using the same doctor slot.
 
-* One active appointment per slot
-* Concurrent-safe booking
-* Historical appointments retained
-* Slot reusability after cancellation
-
-The system also prevents one user from holding overlapping active appointments across different doctors. PostgreSQL stores the selected slot time window on `appointments` and enforces this with an exclusion constraint:
+### No Overlapping Active Appointments Per User
 
 ```sql
+ALTER TABLE appointments
+ADD CONSTRAINT ex_active_user_appointment_overlap
 EXCLUDE USING gist (
     user_id WITH =,
     tstzrange(start_datetime, end_datetime, '[)') WITH &&
 )
-WHERE status IN (
-    'CREATED',
-    'PROCESSING',
-    'CONFIRMED'
-);
+WHERE (status IN ('CREATED', 'PROCESSING', 'CONFIRMED'));
 ```
+
+This prevents one user from holding overlapping active appointments across different doctors, even under concurrent requests.
 
 ## Concurrency Strategy
 
-Booking operations must execute within a transaction.
+The service layer checks for overlap before insert to return a friendly error. PostgreSQL constraints remain the final source of truth for race conditions.
 
-Database constraints remain the source of truth.
+No distributed lock is required for the current design.
 
-No distributed locking is required for Version 1. The service layer performs early validation for better error messages, while PostgreSQL constraints protect concurrent requests.
+## Flyway Migrations
+
+| Migration | Purpose |
+| --- | --- |
+| `V1__create_core_schema.sql` | Core tables, indexes, status checks, active slot unique index |
+| `V2__seed_departments_doctors_slots.sql` | Seed departments, doctors, and appointment slots |
+| `V3__add_event_idempotency.sql` | Add `event_id` to logs and create `processed_events` |
+| `V4__add_correlation_id_to_event_logs.sql` | Add `correlation_id` to event logs |
+| `V5__prevent_overlapping_user_appointments.sql` | Add user overlap exclusion constraint |

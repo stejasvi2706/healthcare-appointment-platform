@@ -1,73 +1,75 @@
 # Implementation Roadmap
 
-## Phase 1 - Project Bootstrap
+This document records what was implemented for the assignment and what remains as production hardening.
 
-* Setup Spring Boot backend
-* Setup React frontend
-* Setup Python worker
-* Setup Docker Compose
-* Setup PostgreSQL
-* Setup Kafka
+## Implemented Phases
 
-## Phase 2 - Database
+### Phase 1 - Project Bootstrap
 
-* Create entities
-* Create migrations
-* Seed departments
-* Seed doctors
-* Generate appointment slots
+- Spring Boot backend with Java 21 and Maven
+- React/Vite frontend
+- Python worker
+- Dockerfiles for backend, frontend, and worker
+- Docker Compose for PostgreSQL, Kafka, backend, worker, and frontend
 
-## Phase 3 - Authentication
+### Phase 2 - Database
 
-* User registration
-* User login
-* JWT generation
-* JWT validation
+- Flyway-managed PostgreSQL schema
+- Users, departments, doctors, slots, appointments, event logs, and processed events
+- Seeded departments, doctors, and appointment slots
+- Partial unique index for active slot booking
+- Exclusion constraint for same-user overlapping appointment protection
 
-## Phase 4 - Appointment Management
+### Phase 3 - Authentication
 
-* Fetch departments
-* Fetch doctors
-* Fetch slots
-* Create appointment
-* Cancel appointment
-* Fetch user appointments
+- Register API
+- Login API
+- BCrypt password hashing
+- HS256 JWT creation and validation
+- Protected appointment APIs
 
-## Phase 5 - Event Processing
+### Phase 4 - Appointment APIs
 
-* Kafka producer
-* Kafka topic creation
-* Python consumer
-* Status updates
-* Audit logging
+- Fetch departments
+- Fetch doctors by department
+- Fetch available slots
+- Create appointment
+- Cancel appointment
+- Fetch user appointments
+- Fetch appointment event history
 
-## Phase 6 - Frontend
+### Phase 5 - Event Processing
 
-* Login page
-* Registration page
-* Department selection
-* Doctor selection
-* Slot selection
-* Appointment history
+- Backend publishes appointment events to Kafka after transaction commit
+- Python worker consumes appointment events
+- Worker stores `eventId` in `processed_events` for idempotency
+- Worker updates appointment status directly in PostgreSQL
+- Worker writes status and notification audit events
 
-## Phase 7 - Documentation
+### Phase 6 - Frontend
 
-* Swagger
-* ER Diagram
-* README updates
-* Demo screenshots
+- Login/register screen
+- Booking screen
+- Appointment history screen
+- Appointment status badges
+- Appointment processing timeline
+- Session expiry handling
+- Overlapping active appointment slots hidden in the UI
 
-## Phase 8 - Dockerization
+### Phase 7 - Documentation
 
-* Backend Dockerfile
-* Frontend Dockerfile
-* Worker Dockerfile
-* Compose orchestration
+- Root setup README
+- Component READMEs
+- Architecture, API, database, demo, submission, and project-context docs
+- Swagger/OpenAPI available from the backend
 
-## Stretch Goals
+## Remaining Production Hardening
 
-* Retry handling
-* Dead letter queue
-* Email notifications
-* Kubernetes deployment
-* CI/CD pipeline
+- Real notification provider integration such as email/SMS
+- Transactional outbox for stronger Kafka delivery guarantees
+- Dead-letter topic and retry policy for worker failures
+- Refresh tokens or short-lived session renewal
+- Role-based authorization
+- Integration tests against real PostgreSQL and Kafka
+- CI/CD pipeline
+- Cloud deployment

@@ -1,10 +1,8 @@
 # Backend
 
-Spring Boot backend for the Healthcare Appointment Platform.
+Spring Boot REST API for the healthcare appointment platform.
 
-## Current Scope
-
-This backend is a functional API shell built with:
+## Stack
 
 - Java 21
 - Spring Boot 3
@@ -13,159 +11,117 @@ This backend is a functional API shell built with:
 - Spring Data JPA
 - PostgreSQL
 - Flyway
-- Spring Kafka producer scaffold
+- Spring Kafka
 - OpenAPI / Swagger UI
 
-It currently implements the database-backed REST API foundation for departments, doctors, slots, appointments, and JWT-based authentication.
+## Responsibilities
 
-The Python worker integration is implemented through Kafka event publishing and direct worker database updates.
+- Register and authenticate users
+- Validate JWTs for appointment APIs
+- Serve catalogue APIs for departments, doctors, and slots
+- Create, cancel, and list appointments
+- Enforce appointment ownership
+- Write appointment audit logs
+- Publish appointment lifecycle events to Kafka
+- Attach correlation IDs to logs, event logs, and Kafka events
 
-It also includes request correlation support. Every HTTP request receives an `X-Correlation-Id` response header. If the client sends `X-Correlation-Id`, the backend reuses it; otherwise it generates one.
-
-## What Works Today
-
-The backend currently supports:
-
-- Health check
-  - `GET /api/health`
-
-- Account access
-  - `POST /api/auth/register`
-  - `POST /api/auth/login`
-
-- Catalogue APIs
-  - `GET /api/departments`
-  - `GET /api/departments/{departmentId}/doctors`
-  - `GET /api/doctors/{doctorId}/slots?date=YYYY-MM-DD`
-
-- Appointment APIs
-  - `GET /api/appointments`
-  - `GET /api/appointments/{appointmentId}/events`
-  - `POST /api/appointments`
-  - `DELETE /api/appointments/{appointmentId}`
-
-The appointment APIs write to PostgreSQL using JPA repositories. They rely on database constraints to prevent duplicate active bookings for the same slot and overlapping active appointment windows for the same user, even when requests arrive concurrently.
-
-Appointment create and cancel operations also publish Kafka events after the database transaction commits.
-
-## Design Intent
-
-This branch is meant to make the backend demonstrable while keeping the architecture honest.
-
-The backend now has real controllers, services, DTOs, repositories, entities, and migrations. It does not fake the database layer.
-
-Authentication is intentionally lightweight but real enough for local development:
-
-- `POST /api/auth/login` returns a signed HS256 JWT.
-- Appointment APIs require `Authorization: Bearer {token}`.
-- Missing or invalid appointment tokens receive `401 Unauthorized`.
-
-This keeps the backend stateless while still allowing the frontend and API workflows to use authenticated user context.
-
-## Folder Structure
+## Package Structure
 
 ```text
-web/backend/
-+-- src/main/java/com/healthcare/appointment/
-|   +-- config/
-|   +-- controllers/
-|   +-- dtos/
-|   +-- entities/
-|   +-- exceptions/
-|   +-- repositories/
-|   +-- services/
-|   +-- HealthcareAppointmentApplication.java
-+-- src/main/resources/
-|   +-- application.yml
-|   +-- db/migration/
-+-- src/test/
-+-- pom.xml
-+-- README.md
+com.healthcare.appointment
+  config
+  controllers
+  dtos
+  entities
+  events
+  exceptions
+  repositories
+  services
 ```
 
-## Important Files
+## Main Endpoints
 
-`config/SecurityConfig.java`
+| Method | Endpoint | Auth | Purpose |
+| --- | --- | --- | --- |
+| GET | `/api/health` | No | Health check |
+| POST | `/api/auth/register` | No | Register user |
+| POST | `/api/auth/login` | No | Login and return JWT |
+| GET | `/api/departments` | No | Fetch departments |
+| GET | `/api/departments/{departmentId}/doctors` | No | Fetch doctors |
+| GET | `/api/doctors/{doctorId}/slots?date=YYYY-MM-DD` | No | Fetch available slots |
+| GET | `/api/appointments` | Yes | Fetch current user's appointments |
+| POST | `/api/appointments` | Yes | Create appointment |
+| DELETE | `/api/appointments/{appointmentId}` | Yes | Cancel appointment |
+| GET | `/api/appointments/{appointmentId}/events` | Yes | Fetch appointment processing timeline |
 
-Configures stateless security, exposes public health/docs/catalogue endpoints, protects appointment endpoints, and provides a BCrypt password encoder.
+Swagger UI:
 
-Appointment APIs require JWT authentication. Health, auth, catalogue reads, and Swagger/OpenAPI remain public.
+```text
+http://localhost:8080/swagger-ui.html
+```
 
-`config/CorrelationIdFilter.java`
+## Booking Rules
 
-Reads or generates `X-Correlation-Id`, stores it in logging MDC, returns it in response headers, and makes it available to services through `CorrelationContext`.
+- A slot can have only one active appointment.
+- A user cannot hold overlapping active appointments, even with different doctors.
+- Active statuses are `CREATED`, `PROCESSING`, and `CONFIRMED`.
+- Cancelled and failed appointments remain as history.
 
-`controllers/AuthController.java`
+The service layer performs early validation for clear API errors. PostgreSQL constraints are the final protection against concurrent requests.
 
-Exposes register and login endpoints. Login returns a signed JWT.
+## Database
 
-`controllers/CatalogueController.java`
+Flyway migrations live in:
 
-Exposes department, doctor, and available slot read APIs.
+```text
+src/main/resources/db/migration
+```
 
-`controllers/AppointmentController.java`
+Important migrations:
 
-Exposes appointment list, event history, create, and cancel APIs. It resolves the current user through `CurrentUserService`.
+| Migration | Purpose |
+| --- | --- |
+| `V1__create_core_schema.sql` | Core schema and active-slot unique index |
+| `V2__seed_departments_doctors_slots.sql` | Initial catalogue and slots |
+| `V3__add_event_idempotency.sql` | `processed_events` and event IDs |
+| `V4__add_correlation_id_to_event_logs.sql` | Correlation IDs in audit logs |
+| `V5__prevent_overlapping_user_appointments.sql` | Exclusion constraint for overlapping appointments |
 
-`services/AuthService.java`
+## Kafka
 
-Handles registration, password hashing, and JWT login.
+The backend publishes events to:
 
-`services/AppointmentService.java`
+```text
+appointment.events
+```
 
-Handles database-backed appointment creation, cancellation, event log reads, event log creation, and appointment event publishing. It checks user-level scheduling conflicts before insert, while PostgreSQL enforces the same rule for concurrent requests.
+Supported event types:
 
-`services/AppointmentEventPublisher.java`
+```text
+APPOINTMENT_CREATED
+APPOINTMENT_CANCELLED
+```
 
-Builds appointment event payloads and publishes them to Kafka after the surrounding database transaction commits.
+Events include:
 
-`services/CatalogueService.java`
+- `eventId` for idempotency
+- `correlationId` for tracing
+- `appointmentId`
+- `userId`
+- `eventType`
+- `timestamp`
 
-Handles read operations for departments, doctors, and available slots.
+Events are published after the database transaction commits.
 
-`services/CurrentUserService.java`
+## Run Locally
 
-Resolves the authenticated user ID from the Spring Security context after `JwtAuthenticationFilter` validates the bearer token.
+Recommended full stack:
 
-`services/JwtTokenService.java`
+```bash
+docker compose up --build backend
+```
 
-Small internal utility for creating and validating HS256 JWTs using `app.security.jwt.secret` and `app.security.jwt.ttl-seconds`.
-
-`services/CorrelationContext.java`
-
-Thread-local request context for the current correlation ID. It keeps service code independent from servlet APIs while still allowing audit logs and future Kafka events to include the request lineage.
-
-`events/AppointmentEvent.java`
-
-Kafka event payload for appointment lifecycle messages. It carries both `eventId` and `correlationId`.
-
-`exceptions/RestExceptionHandler.java`
-
-Returns consistent JSON error responses for known API exceptions.
-
-`db/migration/V1__create_core_schema.sql`
-
-Creates the core tables, constraints, indexes, and active-slot partial unique index.
-
-`db/migration/V2__seed_departments_doctors_slots.sql`
-
-Seeds initial departments, doctors, and pre-generated appointment slots.
-
-`db/migration/V3__add_event_idempotency.sql`
-
-Adds the `processed_events` table and optional `appointment_event_logs.event_id` column. This prepares the backend and worker for at-least-once Kafka delivery.
-
-`db/migration/V4__add_correlation_id_to_event_logs.sql`
-
-Adds optional `appointment_event_logs.correlation_id`. This lets audit records be grouped by the user workflow that produced them.
-
-`db/migration/V5__prevent_overlapping_user_appointments.sql`
-
-Adds appointment time-window columns, keeps them synchronized from the selected slot through a trigger, and adds a PostgreSQL exclusion constraint that prevents one user from holding overlapping active appointments across different doctors.
-
-## How To Run
-
-From `web/backend`:
+Standalone backend:
 
 ```bash
 mvn spring-boot:run
@@ -173,195 +129,36 @@ mvn spring-boot:run
 
 Useful environment variables:
 
-```bash
-export DB_URL=jdbc:postgresql://localhost:5432/healthcare_appointments
-export DB_USERNAME=healthcare
-export DB_PASSWORD=healthcare
-export KAFKA_BOOTSTRAP_SERVERS=localhost:9092
-export APPOINTMENT_EVENTS_TOPIC=appointment.events
-export JWT_SECRET=local-development-jwt-secret-change-before-production
-export JWT_TTL_SECONDS=86400
-export SERVER_PORT=8080
+```text
+DB_URL=jdbc:postgresql://localhost:5432/healthcare_appointments
+DB_USERNAME=healthcare
+DB_PASSWORD=healthcare
+KAFKA_BOOTSTRAP_SERVERS=localhost:9092
+APPOINTMENT_EVENTS_TOPIC=appointment.events
+JWT_SECRET=local-development-jwt-secret-change-before-production
+JWT_TTL_SECONDS=86400
+SERVER_PORT=8080
 ```
 
-Then run:
-
-```bash
-mvn spring-boot:run
-```
-
-From the repository root with Docker Compose:
-
-```bash
-docker compose up --build backend
-```
-
-The full local stack is documented in the root `README.md`.
-
-## How To Test
-
-From `web/backend`:
+## Test
 
 ```bash
 mvn test
 ```
 
-Current test coverage is intentionally light and mostly verifies the application shell. More focused controller/service tests should be added as the API contracts stabilize.
+## Interview Notes
 
-## API Examples
-
-Register:
-
-```bash
-curl -X POST http://localhost:8080/api/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{"name":"Patient Demo","email":"patient@example.com","password":"password123"}'
-```
-
-Login:
-
-```bash
-curl -X POST http://localhost:8080/api/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"patient@example.com","password":"password123"}'
-```
-
-Fetch departments:
-
-```bash
-curl http://localhost:8080/api/departments
-```
-
-Fetch doctors for a department:
-
-```bash
-curl http://localhost:8080/api/departments/1/doctors
-```
-
-Fetch available slots:
-
-```bash
-curl "http://localhost:8080/api/doctors/1/slots?date=2026-06-18"
-```
-
-Create appointment:
-
-```bash
-curl -X POST http://localhost:8080/api/appointments \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer ${TOKEN}" \
-  -d '{"slotId":1}'
-```
-
-Cancel appointment:
-
-```bash
-curl -X DELETE http://localhost:8080/api/appointments/1 \
-  -H "Authorization: Bearer ${TOKEN}"
-```
-
-Fetch appointment event history:
-
-```bash
-curl http://localhost:8080/api/appointments/1/events \
-  -H "Authorization: Bearer ${TOKEN}"
-```
-
-## Auth Boundary
-
-The backend uses signed JWTs for local stateless authentication.
-
-What it does:
-
-- Lets login return a signed token.
-- Lets appointment APIs associate requests with the authenticated user.
-- Allows frontend/backend integration work to continue.
-
-What it does not do:
-
-- It does not implement refresh tokens.
-- It does not implement roles.
-- It does not include production key management.
-
-Production hardening should add key management, refresh tokens or short-lived sessions, stronger validation, and role-aware authorization.
-
-## Worker And Kafka Boundary
-
-Kafka publishing is wired into appointment creation and cancellation.
-
-Currently:
-
-- Creating an appointment stores `CREATED`.
-- Cancelling an appointment stores `CANCELLED`.
-- Event logs are written directly for created/cancelled actions.
-- Backend publishes `APPOINTMENT_CREATED` and `APPOINTMENT_CANCELLED` after the database transaction commits.
-- Published events include `eventId`, `correlationId`, `appointmentId`, `userId`, `eventType`, and `timestamp`.
-- Appointment event history is exposed through `GET /api/appointments/{appointmentId}/events`.
-
-Later:
-
-- Worker should consume events.
-- Worker should update async statuses such as `PROCESSING`, `CONFIRMED`, and `FAILED`.
-- Worker should record consumed event IDs in `processed_events`.
-
-This is important because Kafka consumers usually process messages at least once. If the same event is delivered twice, `processed_events.event_id` lets the worker detect the duplicate and skip side effects.
-
-`appointment_event_logs.event_id` is optional because not every audit row comes from Kafka. Synchronous API actions can write audit rows without an event ID, while worker-driven status changes can include the Kafka event ID for traceability.
-
-The current producer publishes after commit, which prevents publishing events for rolled-back database changes. It is not a full transactional outbox. If Kafka is unavailable after the database commit, the event can still fail to publish. A future reliability pass should add an outbox table and retry publisher if stronger delivery guarantees are required.
-
-## Correlation And Tracing
-
-The backend distinguishes event identity from request lineage:
-
-- `eventId` identifies one exact Kafka event.
-- `correlationId` identifies one end-to-end user workflow.
-
-For example, one appointment request may eventually produce multiple events:
-
-```text
-APPOINTMENT_CREATED eventId=A correlationId=R
-NOTIFICATION_SENT eventId=B correlationId=R
-APPOINTMENT_CONFIRMED eventId=C correlationId=R
-```
-
-The event IDs are different because the messages are different. The correlation ID stays the same because they belong to the same original booking workflow.
-
-Current backend behavior:
-
-- Reads `X-Correlation-Id` from incoming requests.
-- Generates a UUID if no correlation header is present.
-- Returns `X-Correlation-Id` in every response.
-- Adds `correlationId` to log lines through MDC.
-- Writes `correlation_id` to appointment event logs for synchronous appointment create/cancel actions.
-
-Kafka events include both `eventId` and `correlationId`.
-
-## Interview Explanation
-
-This backend was built in layers:
-
-- Entities and Flyway migrations define the database model.
-- Repositories provide persistence access.
-- Services own business workflow decisions.
-- Controllers expose API endpoints and map HTTP requests to services.
+- Controllers expose HTTP endpoints and delegate business decisions to services.
+- Services enforce workflow rules and publish events.
+- Repositories isolate persistence access.
 - DTOs keep API payloads separate from JPA entities.
-
-Important points to explain:
-
-- Flyway owns schema changes; Hibernate validates the schema.
-- Duplicate active bookings are prevented by a PostgreSQL partial unique index.
-- Same-user overlapping active appointments are prevented in the service layer for a fast user-friendly response and by a PostgreSQL exclusion constraint for concurrent requests.
-- The service layer catches duplicate booking conflicts and returns a user-friendly error.
-- Appointment lifecycle is intentionally simple until Kafka/worker status processing is implemented.
-- Worker event idempotency is handled with a dedicated `processed_events` table.
-- `eventId` is for idempotency; `correlationId` is for tracing one workflow across frontend, backend, Kafka, and worker logs.
-- Kafka events are published after the appointment transaction commits, which keeps event publishing aligned with committed database state.
+- Flyway owns schema evolution.
+- `eventId` solves duplicate Kafka delivery; `correlationId` links one user workflow across logs and audit rows.
 
 ## Known Limitations
 
-- JWT authentication is implemented for appointment APIs, but refresh tokens and roles are not implemented yet.
-- Kafka publishing does not yet use an outbox/retry mechanism.
-- Correlation IDs are not yet propagated by the frontend.
-- No integration tests against PostgreSQL are present yet.
-- Notification delivery is represented as a worker audit event, not by a real email/SMS provider yet.
+- No refresh-token flow.
+- No role-based authorization.
+- Kafka publishing does not use a transactional outbox.
+- No automated integration tests against real Kafka/PostgreSQL.
+- Notification delivery is simulated by the worker audit event.
