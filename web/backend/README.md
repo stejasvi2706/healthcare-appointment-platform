@@ -20,6 +20,8 @@ It currently implements the database-backed REST API foundation for departments,
 
 Kafka publishing, real JWT validation, and the Python worker integration are intentionally not implemented yet.
 
+It also includes request correlation support. Every HTTP request receives an `X-Correlation-Id` response header. If the client sends `X-Correlation-Id`, the backend reuses it; otherwise it generates one.
+
 ## What Works Today
 
 The backend currently supports:
@@ -86,6 +88,10 @@ Configures stateless security, exposes health/docs and current API shell endpoin
 
 The broad endpoint permits are temporary. They should be tightened when real JWT validation is implemented.
 
+`config/CorrelationIdFilter.java`
+
+Reads or generates `X-Correlation-Id`, stores it in logging MDC, returns it in response headers, and makes it available to services through `CorrelationContext`.
+
 `controllers/AuthController.java`
 
 Exposes register and login endpoints. Login currently returns a mock token, not a signed JWT.
@@ -118,6 +124,10 @@ Temporary bridge for mock authentication. It resolves a mock token if present, o
 
 Small internal utility for generating and parsing mock tokens. This should be replaced by real JWT support.
 
+`services/CorrelationContext.java`
+
+Thread-local request context for the current correlation ID. It keeps service code independent from servlet APIs while still allowing audit logs and future Kafka events to include the request lineage.
+
 `exceptions/RestExceptionHandler.java`
 
 Returns consistent JSON error responses for known API exceptions.
@@ -133,6 +143,10 @@ Seeds initial departments, doctors, and pre-generated appointment slots.
 `db/migration/V3__add_event_idempotency.sql`
 
 Adds the `processed_events` table and optional `appointment_event_logs.event_id` column. This prepares the backend and worker for at-least-once Kafka delivery.
+
+`db/migration/V4__add_correlation_id_to_event_logs.sql`
+
+Adds optional `appointment_event_logs.correlation_id`. This lets audit records be grouped by the user workflow that produced them.
 
 ## How To Run
 
@@ -260,6 +274,33 @@ This is important because Kafka consumers usually process messages at least once
 
 `appointment_event_logs.event_id` is optional because not every audit row comes from Kafka. Synchronous API actions can write audit rows without an event ID, while worker-driven status changes can include the Kafka event ID for traceability.
 
+## Correlation And Tracing
+
+The backend distinguishes event identity from request lineage:
+
+- `eventId` identifies one exact Kafka event.
+- `correlationId` identifies one end-to-end user workflow.
+
+For example, one appointment request may eventually produce multiple events:
+
+```text
+APPOINTMENT_CREATED eventId=A correlationId=R
+NOTIFICATION_SENT eventId=B correlationId=R
+APPOINTMENT_CONFIRMED eventId=C correlationId=R
+```
+
+The event IDs are different because the messages are different. The correlation ID stays the same because they belong to the same original booking workflow.
+
+Current backend behavior:
+
+- Reads `X-Correlation-Id` from incoming requests.
+- Generates a UUID if no correlation header is present.
+- Returns `X-Correlation-Id` in every response.
+- Adds `correlationId` to log lines through MDC.
+- Writes `correlation_id` to appointment event logs for synchronous appointment create/cancel actions.
+
+Future Kafka events should include both `eventId` and `correlationId`.
+
 ## Interview Explanation
 
 This backend was built in layers:
@@ -278,6 +319,7 @@ Important points to explain:
 - Appointment lifecycle is intentionally simple until Kafka/worker status processing is implemented.
 - Mock-token auth is a development bridge, not production security.
 - Worker event idempotency is handled with a dedicated `processed_events` table before Kafka processing is implemented.
+- `eventId` is for idempotency; `correlationId` is for tracing one workflow across frontend, backend, Kafka, and worker logs.
 
 ## Known Limitations
 
@@ -286,6 +328,7 @@ Important points to explain:
 - Kafka producer logic is not implemented yet.
 - Worker-driven status updates are not implemented yet.
 - `processed_events` is schema groundwork only until the worker is implemented.
+- Correlation IDs are not yet propagated by the frontend or Kafka events.
 - No integration tests against PostgreSQL are present yet.
 - No Docker Compose orchestration has been verified from this backend branch yet.
 - Frontend dev server proxying is not configured in this backend branch.
