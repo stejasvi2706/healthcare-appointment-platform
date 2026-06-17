@@ -1,6 +1,7 @@
 package com.healthcare.appointment.entities;
 
 import java.time.Instant;
+import java.util.UUID;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -31,6 +32,9 @@ public class AppointmentEventLog {
     @Column(name = "event_type", nullable = false, length = 50)
     private AppointmentEventType eventType;
 
+    @Column(name = "event_id")
+    private UUID eventId;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "old_status", length = 20)
     private AppointmentStatus oldStatus;
@@ -51,12 +55,14 @@ public class AppointmentEventLog {
     public AppointmentEventLog(
             Appointment appointment,
             AppointmentEventType eventType,
+            UUID eventId,
             AppointmentStatus oldStatus,
             AppointmentStatus newStatus,
             String message
     ) {
         this.appointment = appointment;
         this.eventType = eventType;
+        this.eventId = eventId;
         this.oldStatus = oldStatus;
         this.newStatus = newStatus;
         this.message = message;
@@ -79,6 +85,10 @@ public class AppointmentEventLog {
 
     public AppointmentEventType getEventType() {
         return eventType;
+    }
+
+    public UUID getEventId() {
+        return eventId;
     }
 
     public AppointmentStatus getOldStatus() {
