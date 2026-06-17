@@ -25,6 +25,9 @@ spring:
 
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
 
 server:
   port: ${SERVER_PORT:8080}
@@ -38,3 +41,8 @@ springdoc:
 logging:
   pattern:
     level: "%5p [correlationId:%X{correlationId:-none}]"
+
+app:
+  kafka:
+    topics:
+      appointment-events: ${APPOINTMENT_EVENTS_TOPIC:appointment.events}

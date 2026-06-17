@@ -13,12 +13,12 @@ This backend is a functional API shell built with:
 - Spring Data JPA
 - PostgreSQL
 - Flyway
-- Spring Kafka dependency scaffold
+- Spring Kafka producer scaffold
 - OpenAPI / Swagger UI
 
 It currently implements the database-backed REST API foundation for departments, doctors, slots, appointments, and mock-token authentication.
 
-Kafka publishing, real JWT validation, and the Python worker integration are intentionally not implemented yet.
+Real JWT validation and the Python worker integration are intentionally not implemented yet.
 
 It also includes request correlation support. Every HTTP request receives an `X-Correlation-Id` response header. If the client sends `X-Correlation-Id`, the backend reuses it; otherwise it generates one.
 
@@ -44,6 +44,8 @@ The backend currently supports:
   - `DELETE /api/appointments/{appointmentId}`
 
 The appointment APIs write to PostgreSQL using JPA repositories and rely on the database partial unique index to prevent duplicate active bookings for the same slot.
+
+Appointment create and cancel operations also publish Kafka events after the database transaction commits.
 
 ## Design Intent
 
@@ -110,7 +112,11 @@ Handles registration, password hashing, and mock-token login.
 
 `services/AppointmentService.java`
 
-Handles database-backed appointment creation, cancellation, and event log creation.
+Handles database-backed appointment creation, cancellation, event log creation, and appointment event publishing.
+
+`services/AppointmentEventPublisher.java`
+
+Builds appointment event payloads and publishes them to Kafka after the surrounding database transaction commits.
 
 `services/CatalogueService.java`
 
@@ -127,6 +133,10 @@ Small internal utility for generating and parsing mock tokens. This should be re
 `services/CorrelationContext.java`
 
 Thread-local request context for the current correlation ID. It keeps service code independent from servlet APIs while still allowing audit logs and future Kafka events to include the request lineage.
+
+`events/AppointmentEvent.java`
+
+Kafka event payload for appointment lifecycle messages. It carries both `eventId` and `correlationId`.
 
 `exceptions/RestExceptionHandler.java`
 
@@ -163,6 +173,7 @@ export DB_URL=jdbc:postgresql://localhost:5432/healthcare_appointments
 export DB_USERNAME=healthcare
 export DB_PASSWORD=healthcare
 export KAFKA_BOOTSTRAP_SERVERS=localhost:9092
+export APPOINTMENT_EVENTS_TOPIC=appointment.events
 export SERVER_PORT=8080
 ```
 
@@ -255,17 +266,18 @@ This should be replaced in the backend auth branch with JWT generation and valid
 
 ## Worker And Kafka Boundary
 
-Kafka is not wired into appointment creation yet.
+Kafka publishing is wired into appointment creation and cancellation.
 
 Currently:
 
 - Creating an appointment stores `CREATED`.
 - Cancelling an appointment stores `CANCELLED`.
 - Event logs are written directly for created/cancelled actions.
+- Backend publishes `APPOINTMENT_CREATED` and `APPOINTMENT_CANCELLED` after the database transaction commits.
+- Published events include `eventId`, `correlationId`, `appointmentId`, `userId`, `eventType`, and `timestamp`.
 
 Later:
 
-- Backend should publish `APPOINTMENT_CREATED` and `APPOINTMENT_CANCELLED`.
 - Worker should consume events.
 - Worker should update async statuses such as `PROCESSING`, `CONFIRMED`, and `FAILED`.
 - Worker should record consumed event IDs in `processed_events`.
@@ -273,6 +285,8 @@ Later:
 This is important because Kafka consumers usually process messages at least once. If the same event is delivered twice, `processed_events.event_id` lets the worker detect the duplicate and skip side effects.
 
 `appointment_event_logs.event_id` is optional because not every audit row comes from Kafka. Synchronous API actions can write audit rows without an event ID, while worker-driven status changes can include the Kafka event ID for traceability.
+
+The current producer publishes after commit, which prevents publishing events for rolled-back database changes. It is not a full transactional outbox. If Kafka is unavailable after the database commit, the event can still fail to publish. A future reliability pass should add an outbox table and retry publisher if stronger delivery guarantees are required.
 
 ## Correlation And Tracing
 
@@ -299,7 +313,7 @@ Current backend behavior:
 - Adds `correlationId` to log lines through MDC.
 - Writes `correlation_id` to appointment event logs for synchronous appointment create/cancel actions.
 
-Future Kafka events should include both `eventId` and `correlationId`.
+Kafka events include both `eventId` and `correlationId`.
 
 ## Interview Explanation
 
@@ -320,15 +334,16 @@ Important points to explain:
 - Mock-token auth is a development bridge, not production security.
 - Worker event idempotency is handled with a dedicated `processed_events` table before Kafka processing is implemented.
 - `eventId` is for idempotency; `correlationId` is for tracing one workflow across frontend, backend, Kafka, and worker logs.
+- Kafka events are published after the appointment transaction commits, which keeps event publishing aligned with committed database state.
 
 ## Known Limitations
 
 - Real JWT authentication is not implemented yet.
 - API endpoints are broadly permitted in `SecurityConfig` for the functional shell.
-- Kafka producer logic is not implemented yet.
 - Worker-driven status updates are not implemented yet.
 - `processed_events` is schema groundwork only until the worker is implemented.
-- Correlation IDs are not yet propagated by the frontend or Kafka events.
+- Kafka publishing does not yet use an outbox/retry mechanism.
+- Correlation IDs are not yet propagated by the frontend.
 - No integration tests against PostgreSQL are present yet.
 - No Docker Compose orchestration has been verified from this backend branch yet.
 - Frontend dev server proxying is not configured in this backend branch.

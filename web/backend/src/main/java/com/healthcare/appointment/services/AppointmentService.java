@@ -27,17 +27,20 @@ public class AppointmentService {
     private final AppointmentSlotRepository appointmentSlotRepository;
     private final AppointmentEventLogRepository eventLogRepository;
     private final AppointmentMapper appointmentMapper;
+    private final AppointmentEventPublisher appointmentEventPublisher;
 
     public AppointmentService(
             AppointmentRepository appointmentRepository,
             AppointmentSlotRepository appointmentSlotRepository,
             AppointmentEventLogRepository eventLogRepository,
-            AppointmentMapper appointmentMapper
+            AppointmentMapper appointmentMapper,
+            AppointmentEventPublisher appointmentEventPublisher
     ) {
         this.appointmentRepository = appointmentRepository;
         this.appointmentSlotRepository = appointmentSlotRepository;
         this.eventLogRepository = eventLogRepository;
         this.appointmentMapper = appointmentMapper;
+        this.appointmentEventPublisher = appointmentEventPublisher;
     }
 
     @Transactional(readOnly = true)
@@ -59,10 +62,14 @@ public class AppointmentService {
 
         try {
             Appointment saved = appointmentRepository.saveAndFlush(appointment);
+            var eventId = appointmentEventPublisher.publishAfterCommit(
+                    saved,
+                    AppointmentEventType.APPOINTMENT_CREATED
+            );
             eventLogRepository.save(new AppointmentEventLog(
                     saved,
                     AppointmentEventType.APPOINTMENT_CREATED,
-                    null,
+                    eventId,
                     CorrelationContext.get(),
                     null,
                     AppointmentStatus.CREATED,
@@ -94,10 +101,14 @@ public class AppointmentService {
         }
 
         appointment.setStatus(AppointmentStatus.CANCELLED);
+        var eventId = appointmentEventPublisher.publishAfterCommit(
+                appointment,
+                AppointmentEventType.APPOINTMENT_CANCELLED
+        );
         eventLogRepository.save(new AppointmentEventLog(
                 appointment,
                 AppointmentEventType.APPOINTMENT_CANCELLED,
-                null,
+                eventId,
                 CorrelationContext.get(),
                 oldStatus,
                 AppointmentStatus.CANCELLED,
