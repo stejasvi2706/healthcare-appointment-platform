@@ -15,6 +15,94 @@ Kafka
 Python Worker ---------> PostgreSQL
 ```
 
+## System Design Diagram
+
+```mermaid
+flowchart LR
+    subgraph Client["Client Layer"]
+        UI["React Frontend<br/>Vite App<br/><br/>- Register/Login<br/>- View Departments<br/>- View Doctors<br/>- Fetch Available Slots<br/>- Book/Cancel Appointment<br/>- Poll Status Timeline"]
+        LocalStorage["Browser localStorage<br/>JWT Token"]
+    end
+
+    subgraph Backend["Spring Boot Backend"]
+        AuthController["Auth Controller<br/><br/>POST /api/auth/register<br/>POST /api/auth/login"]
+        CatalogueController["Catalogue Controllers<br/><br/>GET /api/departments<br/>GET /api/departments/{id}/doctors<br/>GET /api/doctors/{id}/slots"]
+        AppointmentController["Appointment Controller<br/><br/>GET /api/appointments<br/>POST /api/appointments<br/>DELETE /api/appointments/{id}<br/>GET /api/appointments/{id}/events"]
+        JwtFilter["JWT Auth Filter<br/>Validates Bearer Token"]
+        Services["Service Layer<br/><br/>- AuthService<br/>- AppointmentService<br/>- Slot/Doctor/Department Services<br/>- Validation<br/>- Ownership Checks<br/>- Friendly Conflict Errors"]
+        Repositories["Repository Layer<br/>Spring Data JPA"]
+        EventPublisher["Kafka Event Publisher<br/><br/>Publishes after DB commit"]
+        Swagger["Swagger/OpenAPI Docs<br/>/swagger-ui.html"]
+    end
+
+    subgraph DB["PostgreSQL Database"]
+        Users["users<br/><br/>id<br/>name<br/>email unique<br/>password_hash<br/>timestamps"]
+        Departments["departments<br/><br/>id<br/>name<br/>timestamps"]
+        Doctors["doctors<br/><br/>id<br/>department_id<br/>name<br/>specialization<br/>timestamps"]
+        Slots["appointment_slots<br/><br/>id<br/>doctor_id<br/>start_datetime<br/>end_datetime<br/>timestamps"]
+        Appointments["appointments<br/><br/>id<br/>user_id<br/>slot_id<br/>start_datetime<br/>end_datetime<br/>status<br/>timestamps"]
+        EventLogs["appointment_event_logs<br/><br/>id<br/>appointment_id<br/>event_type<br/>event_id<br/>correlation_id<br/>old_status<br/>new_status<br/>message<br/>created_at"]
+        ProcessedEvents["processed_events<br/><br/>event_id PK<br/>event_type<br/>appointment_id<br/>processed_at"]
+        Constraints["DB Constraints<br/><br/>1. Unique active appointment per slot<br/>2. No overlapping active appointments per user<br/>3. Unique user email<br/>4. Status checks"]
+    end
+
+    subgraph Messaging["Messaging Layer"]
+        Kafka["Kafka Broker"]
+        Topic["Topic: appointment.events<br/><br/>Event Types:<br/>APPOINTMENT_CREATED<br/>APPOINTMENT_CANCELLED"]
+    end
+
+    subgraph Worker["Python Worker Service"]
+        Consumer["Kafka Consumer<br/>Consumes appointment.events"]
+        Processor["Appointment Processor<br/><br/>- Parse Event<br/>- Check Idempotency<br/>- Update Status<br/>- Simulate Notification<br/>- Write Audit Log"]
+        WorkerDBClient["PostgreSQL Client<br/>Transactional Writes"]
+    end
+
+    subgraph Infra["Dockerized Local Stack"]
+        Compose["compose.yml<br/><br/>Runs:<br/>- Frontend<br/>- Backend<br/>- Worker<br/>- PostgreSQL<br/>- Kafka"]
+        Flyway["Flyway Migrations<br/><br/>Schema<br/>Indexes<br/>Constraints<br/>Seed Data"]
+    end
+
+    UI -->|"Register/Login"| AuthController
+    AuthController -->|"JWT"| UI
+    UI --> LocalStorage
+    LocalStorage -->|"Authorization: Bearer token"| UI
+    UI -->|"Fetch departments/doctors/slots"| CatalogueController
+    UI -->|"Create/Cancel/View appointments"| AppointmentController
+    UI -->|"Poll appointment timeline"| AppointmentController
+
+    AppointmentController --> JwtFilter
+    CatalogueController --> Services
+    AuthController --> Services
+    JwtFilter --> Services
+    Services --> Repositories
+    Repositories --> DB
+    Services -->|"After successful appointment creation/cancellation"| EventPublisher
+    EventPublisher --> Kafka
+    Kafka --> Topic
+    Swagger -.-> Backend
+
+    Departments --> Doctors
+    Doctors --> Slots
+    Users --> Appointments
+    Slots --> Appointments
+    Appointments --> EventLogs
+    Constraints --> Appointments
+
+    Topic --> Consumer
+    Consumer --> Processor
+    Processor --> WorkerDBClient
+    WorkerDBClient --> ProcessedEvents
+    WorkerDBClient --> Appointments
+    WorkerDBClient --> EventLogs
+
+    Compose -.-> UI
+    Compose -.-> Backend
+    Compose -.-> Worker
+    Compose -.-> DB
+    Compose -.-> Kafka
+    Flyway -.-> DB
+```
+
 ## Responsibilities
 
 | Component | Responsibilities |

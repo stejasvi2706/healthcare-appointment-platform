@@ -109,7 +109,6 @@ Authorization: Bearer <jwt>
 - [Submission Checklist](docs/submission-checklist.md)
 - [Demo Commands](docs/demo-commands.md)
 - [Project Context](docs/project-context.md)
-- [Interview Notes](docs/interview-notes.md)
 - [Backend README](web/backend/README.md)
 - [Frontend README](web/frontend/README.md)
 - [Worker README](worker/README.md)
